@@ -27,6 +27,7 @@ func (m *mockGitHubClient) GetIssue(_ context.Context, _ int) (*github.Issue, er
 	return nil, nil
 }
 func (m *mockGitHubClient) AssignIssue(_ context.Context, _ int, _ []string) error  { return nil }
+func (m *mockGitHubClient) AssignSelfIfNoAssignees(_ context.Context, _ int) error { return nil }
 func (m *mockGitHubClient) AddLabels(_ context.Context, _ int, _ []string) error    { return nil }
 func (m *mockGitHubClient) RemoveLabel(_ context.Context, _ int, _ string) error     { return nil }
 func (m *mockGitHubClient) CreateIssue(_ context.Context, _ string, _ string, _ []string) (*github.Issue, error) {

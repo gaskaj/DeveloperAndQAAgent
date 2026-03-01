@@ -51,6 +51,29 @@ func (c *GitHubClient) AssignIssue(ctx context.Context, number int, assignees []
 	return nil
 }
 
+// AssignSelfIfNoAssignees assigns the authenticated user to an issue if it has no assignees.
+func (c *GitHubClient) AssignSelfIfNoAssignees(ctx context.Context, number int) error {
+	// Get the current issue to check assignees
+	issue, err := c.GetIssue(ctx, number)
+	if err != nil {
+		return fmt.Errorf("getting issue #%d: %w", number, err)
+	}
+
+	// If issue already has assignees, do nothing
+	if len(issue.Assignees) > 0 {
+		return nil
+	}
+
+	// Get the authenticated user
+	user, _, err := c.client.Users.Get(ctx, "")
+	if err != nil {
+		return fmt.Errorf("getting authenticated user: %w", err)
+	}
+
+	// Assign self to the issue
+	return c.AssignIssue(ctx, number, []string{user.GetLogin()})
+}
+
 // AddLabels adds labels to an issue.
 func (c *GitHubClient) AddLabels(ctx context.Context, number int, labels []string) error {
 	_, _, err := c.client.Issues.AddLabelsToIssue(ctx, c.owner, c.repo, number, labels)

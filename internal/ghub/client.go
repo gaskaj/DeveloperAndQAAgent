@@ -12,6 +12,7 @@ type Client interface {
 	ListIssues(ctx context.Context, labels []string) ([]*github.Issue, error)
 	GetIssue(ctx context.Context, number int) (*github.Issue, error)
 	AssignIssue(ctx context.Context, number int, assignees []string) error
+	AssignSelfIfNoAssignees(ctx context.Context, number int) error
 	AddLabels(ctx context.Context, number int, labels []string) error
 	RemoveLabel(ctx context.Context, number int, label string) error
 

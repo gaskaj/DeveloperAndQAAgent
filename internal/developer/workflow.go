@@ -220,6 +220,12 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 }
 
 func (d *DeveloperAgent) claimIssue(ctx context.Context, number int) error {
+	// Assign self if no assignees
+	if err := d.Deps.GitHub.AssignSelfIfNoAssignees(ctx, number); err != nil {
+		d.logger().Warn("failed to assign self to issue", "issue", number, "error", err)
+		// Don't fail claiming if assignment fails - continue with labeling and comment
+	}
+	
 	if err := d.Deps.GitHub.AddLabels(ctx, number, []string{"agent:claimed"}); err != nil {
 		return err
 	}

@@ -281,6 +281,7 @@ func (m *trackingMockGitHub) GetIssue(_ context.Context, number int) (*github.Is
 }
 
 func (m *trackingMockGitHub) AssignIssue(_ context.Context, _ int, _ []string) error { return nil }
+func (m *trackingMockGitHub) AssignSelfIfNoAssignees(_ context.Context, _ int) error { return nil }
 
 func (m *trackingMockGitHub) AddLabels(_ context.Context, number int, labels []string) error {
 	m.addedLabels[number] = append(m.addedLabels[number], labels...)
