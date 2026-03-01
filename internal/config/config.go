@@ -16,7 +16,8 @@ type Config struct {
 	Agents     AgentsConfig     `mapstructure:"agents"`
 	State      StateConfig      `mapstructure:"state"`
 	Logging    LoggingConfig    `mapstructure:"logging"`
-	Creativity CreativityConfig `mapstructure:"creativity"`
+	Creativity    CreativityConfig    `mapstructure:"creativity"`
+	Decomposition DecompositionConfig `mapstructure:"decomposition"`
 }
 
 // GitHubConfig holds GitHub-related configuration.
@@ -65,6 +66,13 @@ type CreativityConfig struct {
 	SuggestionCooldownSeconds int  `mapstructure:"suggestion_cooldown_seconds"`
 	MaxPendingSuggestions     int  `mapstructure:"max_pending_suggestions"`
 	MaxRejectionHistory       int  `mapstructure:"max_rejection_history"`
+}
+
+// DecompositionConfig holds configuration for issue decomposition.
+type DecompositionConfig struct {
+	Enabled            bool `mapstructure:"enabled"`
+	MaxIterationBudget int  `mapstructure:"max_iteration_budget"`
+	MaxSubtasks        int  `mapstructure:"max_subtasks"`
 }
 
 // Load reads configuration from the given file path, expanding environment variables.

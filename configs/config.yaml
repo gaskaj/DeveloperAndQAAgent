@@ -43,7 +43,7 @@ logging:
 
 creativity:
   # Enable autonomous creativity mode when idle (disabled by default for safety)
-  enabled: false
+  enabled: true
   # Seconds idle before entering creativity mode
   idle_threshold_seconds: 120
   # Cooldown between suggestions (seconds)
@@ -52,3 +52,11 @@ creativity:
   max_pending_suggestions: 1
   # Maximum rejected titles to remember
   max_rejection_history: 50
+
+decomposition:
+  # Enable automatic issue decomposition for complex issues
+  enabled: true
+  # Iteration budget for complexity estimation (hard limit is 20)
+  max_iteration_budget: 15
+  # Maximum number of subtasks when decomposing
+  max_subtasks: 5

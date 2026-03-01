@@ -3,11 +3,20 @@ package claude
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 
 	"github.com/anthropics/anthropic-sdk-go"
 )
+
+// ErrMaxIterations is returned when a conversation exceeds the maximum allowed iterations.
+var ErrMaxIterations = errors.New("conversation exceeded maximum iterations")
+
+// IsMaxIterationsError reports whether err is or wraps ErrMaxIterations.
+func IsMaxIterationsError(err error) bool {
+	return errors.Is(err, ErrMaxIterations)
+}
 
 // ToolExecutor executes a tool call and returns the result as a string.
 type ToolExecutor func(ctx context.Context, name string, input json.RawMessage) (string, error)
@@ -71,7 +80,7 @@ func (c *Conversation) Send(ctx context.Context, userMessage string) (string, er
 		c.messages = append(c.messages, anthropic.NewUserMessage(toolResults...))
 	}
 
-	return "", fmt.Errorf("conversation exceeded maximum iterations (%d)", maxIterations)
+	return "", fmt.Errorf("%w (%d)", ErrMaxIterations, maxIterations)
 }
 
 func (c *Conversation) processToolCalls(ctx context.Context, msg *anthropic.Message) ([]anthropic.ContentBlockParamUnion, error) {
