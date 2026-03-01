@@ -115,6 +115,73 @@ func TestFormatIssueLinks_Empty(t *testing.T) {
 	assert.Equal(t, "", formatIssueLinks([]int{}))
 }
 
+// --- parseEstimatedIterations tests ---
+
+func TestParseEstimatedIterations_Found(t *testing.T) {
+	response := "Some analysis...\n\n**Estimated iterations**: 12\n\n**Fits within budget**: yes"
+	assert.Equal(t, 12, parseEstimatedIterations(response))
+}
+
+func TestParseEstimatedIterations_NotFound(t *testing.T) {
+	response := "Some analysis without an estimate."
+	assert.Equal(t, 0, parseEstimatedIterations(response))
+}
+
+func TestParseEstimatedIterations_PlainText(t *testing.T) {
+	response := "Estimated iterations: 25"
+	assert.Equal(t, 25, parseEstimatedIterations(response))
+}
+
+func TestParseEstimatedIterations_CaseInsensitive(t *testing.T) {
+	response := "**estimated iterations**: 8"
+	assert.Equal(t, 8, parseEstimatedIterations(response))
+}
+
+// --- formatSubtaskBreakdown tests ---
+
+func TestFormatSubtaskBreakdown(t *testing.T) {
+	sts := []subtask{
+		{Title: "Add model", Body: "Create the User struct in models.go."},
+		{Title: "Add handler", Body: "Create HTTP handler for CRUD."},
+	}
+	result := formatSubtaskBreakdown(sts, []int{101, 102})
+	assert.Contains(t, result, "#101")
+	assert.Contains(t, result, "**Add model**")
+	assert.Contains(t, result, "#102")
+	assert.Contains(t, result, "**Add handler**")
+}
+
+func TestFormatSubtaskBreakdown_MoreSubtasksThanNums(t *testing.T) {
+	sts := []subtask{
+		{Title: "First", Body: "Do first thing."},
+		{Title: "Second", Body: "Do second thing."},
+	}
+	result := formatSubtaskBreakdown(sts, []int{101})
+	assert.Contains(t, result, "#101")
+	assert.Contains(t, result, "**Second**")
+	// Second subtask should not have an issue number.
+	assert.NotContains(t, result, "#102")
+}
+
+func TestFormatSubtaskBreakdown_Empty(t *testing.T) {
+	result := formatSubtaskBreakdown(nil, nil)
+	assert.Equal(t, "", result)
+}
+
+// --- firstLine tests ---
+
+func TestFirstLine_Normal(t *testing.T) {
+	assert.Equal(t, "Hello world", firstLine("Hello world\nSecond line"))
+}
+
+func TestFirstLine_Empty(t *testing.T) {
+	assert.Equal(t, "", firstLine(""))
+}
+
+func TestFirstLine_LeadingNewlines(t *testing.T) {
+	assert.Equal(t, "Content here", firstLine("\n\n  Content here\nMore"))
+}
+
 func TestHasLabel_Match(t *testing.T) {
 	issue := &github.Issue{
 		Labels: []*github.Label{
@@ -343,4 +410,31 @@ func TestProcessChildIssues_SkipsWithoutReadyLabel(t *testing.T) {
 
 	// Summary should still be posted.
 	require.NotEmpty(t, mock.comments[10])
+}
+
+func TestProcessChildIssues_PostsProgressComments(t *testing.T) {
+	mock := newTrackingMock()
+
+	// Pre-populate two child issues (both will fail to process since they trigger
+	// full processIssue, but we only care about the progress comments).
+	mock.issues[101] = &github.Issue{
+		Number: github.Ptr(101),
+		Title:  github.Ptr("Child 1"),
+		Labels: []*github.Label{{Name: github.Ptr("bug")}}, // no agent:ready, will be skipped
+	}
+	mock.issues[102] = &github.Issue{
+		Number: github.Ptr(102),
+		Title:  github.Ptr("Child 2"),
+		Labels: []*github.Label{{Name: github.Ptr("bug")}}, // no agent:ready, will be skipped
+	}
+
+	da := newTestAgent(t, mock, true)
+
+	err := da.processChildIssues(context.Background(), []int{101, 102}, 10)
+	assert.NoError(t, err)
+
+	// Should have progress comments for each child + final summary = 3 comments on parent.
+	require.Len(t, mock.comments[10], 3)
+	assert.Contains(t, mock.comments[10][0], "Processing subtask 1/2: #101")
+	assert.Contains(t, mock.comments[10][1], "Processing subtask 2/2: #102")
 }

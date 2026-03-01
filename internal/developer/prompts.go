@@ -39,18 +39,34 @@ const ImplementPrompt = `Implement the following plan for this issue. Use the av
 Write all necessary code, then run "go build ./..." and "go test ./..." to verify.`
 
 // ComplexityEstimatePrompt is appended to the AnalyzePrompt when decomposition is enabled.
-// It asks Claude to estimate tool iterations and decide if the issue fits within the budget.
+// It asks Claude to enumerate each tool-use operation and produce a structured estimate.
 const ComplexityEstimatePrompt = `
 
 ## Complexity Estimation
 
-After creating your plan, estimate the number of tool-use iterations (file reads, writes, and command runs) needed to implement it. The iteration budget is %d.
+After creating your plan, estimate the number of tool-use iterations needed to implement it.
+Each of the following counts as one iteration: list_files, read_file, write_file, run_command.
 
-At the end of your response, include exactly:
+Enumerate every operation step-by-step, for example:
+
+1. list_files to discover project structure
+2. read_file to inspect existing handler
+3. write_file to create new model
+4. write_file to update handler
+5. run_command: go build ./...
+6. run_command: go test ./...
+
+Then state the total on its own line in exactly this format:
+
+**Estimated iterations**: <N>
+
+The iteration budget is %d. To account for unexpected reads, retries, and test fixes,
+apply a 30%% safety margin: if your estimate exceeds %d of the budget (i.e., 70%%),
+answer "no".
+
+At the end of your response, include exactly one of:
 
 **Fits within budget**: yes
-
-OR
 
 **Fits within budget**: no
 

@@ -29,16 +29,23 @@ type Conversation struct {
 	tools    []anthropic.ToolUnionParam
 	executor ToolExecutor
 	logger   *slog.Logger
+	maxIter  int
 }
 
 // NewConversation creates a new conversation manager.
-func NewConversation(client *Client, system string, tools []anthropic.ToolUnionParam, executor ToolExecutor, logger *slog.Logger) *Conversation {
+// maxIter controls the maximum number of tool-use iterations in Send().
+// When maxIter is 0, it defaults to 20.
+func NewConversation(client *Client, system string, tools []anthropic.ToolUnionParam, executor ToolExecutor, logger *slog.Logger, maxIter int) *Conversation {
+	if maxIter <= 0 {
+		maxIter = 20
+	}
 	return &Conversation{
 		client:   client,
 		system:   system,
 		tools:    tools,
 		executor: executor,
 		logger:   logger,
+		maxIter:  maxIter,
 	}
 }
 
@@ -49,8 +56,7 @@ func (c *Conversation) Send(ctx context.Context, userMessage string) (string, er
 		anthropic.NewTextBlock(userMessage),
 	))
 
-	const maxIterations = 20
-	for i := 0; i < maxIterations; i++ {
+	for i := 0; i < c.maxIter; i++ {
 		var msg *anthropic.Message
 		var err error
 
@@ -80,7 +86,7 @@ func (c *Conversation) Send(ctx context.Context, userMessage string) (string, er
 		c.messages = append(c.messages, anthropic.NewUserMessage(toolResults...))
 	}
 
-	return "", fmt.Errorf("%w (%d)", ErrMaxIterations, maxIterations)
+	return "", fmt.Errorf("%w (%d)", ErrMaxIterations, c.maxIter)
 }
 
 func (c *Conversation) processToolCalls(ctx context.Context, msg *anthropic.Message) ([]anthropic.ContentBlockParamUnion, error) {

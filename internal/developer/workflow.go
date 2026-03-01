@@ -68,6 +68,16 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 		return err
 	}
 
+	// Post analysis plan as a comment on the issue.
+	analysisComment := fmt.Sprintf("🤖 **Analysis complete**\n\n%s", plan)
+	if d.Deps.Config.Decomposition.Enabled {
+		if est := parseEstimatedIterations(plan); est > 0 {
+			analysisComment += fmt.Sprintf("\n\n---\n**Estimated iterations**: %d | **Budget**: %d",
+				est, d.Deps.Config.Decomposition.MaxIterationBudget)
+		}
+	}
+	_ = d.Deps.GitHub.CreateComment(ctx, issueNum, analysisComment)
+
 	// Step 2.5: Proactive decomposition
 	if tooComplex && d.Deps.Config.Decomposition.Enabled {
 		d.logger().Info("issue too complex, decomposing", "issue", issueNum)
@@ -219,6 +229,7 @@ func (d *DeveloperAgent) analyze(ctx context.Context, issueContext string) (plan
 		nil, // no tools for analysis
 		nil,
 		d.Deps.Logger,
+		0, // no tools, single-turn — limit doesn't apply
 	)
 
 	prompt := fmt.Sprintf(AnalyzePrompt, issueContext)
@@ -226,8 +237,9 @@ func (d *DeveloperAgent) analyze(ctx context.Context, issueContext string) (plan
 	// When decomposition is enabled, append complexity estimation to the prompt.
 	if d.Deps.Config.Decomposition.Enabled {
 		budget := d.Deps.Config.Decomposition.MaxIterationBudget
+		threshold := int(float64(budget) * 0.7) // 70% of budget
 		maxSubtasks := d.Deps.Config.Decomposition.MaxSubtasks
-		prompt += fmt.Sprintf(ComplexityEstimatePrompt, budget, maxSubtasks)
+		prompt += fmt.Sprintf(ComplexityEstimatePrompt, budget, threshold, maxSubtasks)
 	}
 
 	response, err := conv.Send(ctx, prompt)
@@ -245,12 +257,19 @@ func (d *DeveloperAgent) analyze(ctx context.Context, issueContext string) (plan
 func (d *DeveloperAgent) implement(ctx context.Context, repo *gitops.Repo, issueContext, plan string) error {
 	executor := d.createToolExecutor(repo)
 
+	// Use the configured iteration budget when decomposition is enabled; default otherwise.
+	maxIter := 0
+	if d.Deps.Config.Decomposition.Enabled {
+		maxIter = d.Deps.Config.Decomposition.MaxIterationBudget
+	}
+
 	conv := claude.NewConversation(
 		d.Deps.Claude,
 		SystemPrompt,
 		claude.DevTools(),
 		executor,
 		d.Deps.Logger,
+		maxIter,
 	)
 
 	prompt := fmt.Sprintf(ImplementPrompt, issueContext, plan)

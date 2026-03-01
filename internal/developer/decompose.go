@@ -26,6 +26,49 @@ func parseComplexityResult(response string) bool {
 		strings.Contains(lower, "fits within budget: no")
 }
 
+// parseEstimatedIterations extracts the numeric estimate from "**Estimated iterations**: N".
+// Returns 0 if the pattern is not found.
+func parseEstimatedIterations(response string) int {
+	re := regexp.MustCompile(`(?i)\*?\*?Estimated iterations\*?\*?:\s*(\d+)`)
+	match := re.FindStringSubmatch(response)
+	if len(match) < 2 {
+		return 0
+	}
+	n, err := strconv.Atoi(match[1])
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+// formatSubtaskBreakdown formats a list of subtasks with their child issue numbers
+// into a readable markdown breakdown for GitHub comments.
+func formatSubtaskBreakdown(subtasks []subtask, childNums []int) string {
+	var sb strings.Builder
+	for i, st := range subtasks {
+		if i < len(childNums) {
+			sb.WriteString(fmt.Sprintf("- #%d — **%s**: %s\n", childNums[i], st.Title, firstLine(st.Body)))
+		} else {
+			sb.WriteString(fmt.Sprintf("- **%s**: %s\n", st.Title, firstLine(st.Body)))
+		}
+	}
+	return sb.String()
+}
+
+// firstLine returns the first non-empty line of text, truncated to 200 chars.
+func firstLine(text string) string {
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			if len(line) > 200 {
+				return line[:200] + "..."
+			}
+			return line
+		}
+	}
+	return ""
+}
+
 // parseSubtasks extracts subtasks from text formatted with "### Subtask N: <title>" markers.
 func parseSubtasks(text string) []subtask {
 	re := regexp.MustCompile(`(?m)^###\s+Subtask\s+\d+:\s*(.+)$`)
@@ -108,6 +151,7 @@ func (d *DeveloperAgent) decompose(ctx context.Context, issueNum int, issueConte
 			nil,
 			nil,
 			d.Deps.Logger,
+			0, // no tools, single-turn — limit doesn't apply
 		)
 
 		maxSubtasks := d.Deps.Config.Decomposition.MaxSubtasks
@@ -140,10 +184,18 @@ func (d *DeveloperAgent) decompose(ctx context.Context, issueNum int, issueConte
 	_ = d.Deps.GitHub.AddLabels(ctx, issueNum, []string{"agent:epic"})
 	_ = d.Deps.GitHub.RemoveLabel(ctx, issueNum, "agent:ready")
 
-	// Post summary comment.
+	// Post enriched summary comment.
+	budget := d.Deps.Config.Decomposition.MaxIterationBudget
+	estimated := parseEstimatedIterations(plan)
+	var reason string
+	if estimated > 0 {
+		reason = fmt.Sprintf("Estimated iterations (%d) exceeds budget (%d).", estimated, budget)
+	} else {
+		reason = fmt.Sprintf("Analysis determined this issue exceeds the iteration budget (%d).", budget)
+	}
 	comment := fmt.Sprintf(
-		"🤖 This issue has been decomposed into %d subtasks: %s\n\nEach subtask will be processed independently.",
-		len(childNums), formatIssueLinks(childNums),
+		"🤖 **Issue decomposed into %d subtasks**\n\n**Reason**: %s\n\n### Subtasks\n%s\nEach subtask will be processed independently.",
+		len(childNums), reason, formatSubtaskBreakdown(subtasks, childNums),
 	)
 	_ = d.Deps.GitHub.CreateComment(ctx, issueNum, comment)
 
@@ -160,6 +212,7 @@ func (d *DeveloperAgent) reactiveDecompose(ctx context.Context, issueNum int, is
 		nil,
 		nil,
 		d.Deps.Logger,
+		0, // no tools, single-turn — limit doesn't apply
 	)
 
 	maxSubtasks := d.Deps.Config.Decomposition.MaxSubtasks
@@ -189,10 +242,11 @@ func (d *DeveloperAgent) reactiveDecompose(ctx context.Context, issueNum int, is
 	_ = d.Deps.GitHub.AddLabels(ctx, issueNum, []string{"agent:epic", "agent:failed"})
 	_ = d.Deps.GitHub.RemoveLabel(ctx, issueNum, "agent:ready")
 
-	// Post summary comment.
+	// Post enriched summary comment.
+	budget := d.Deps.Config.Decomposition.MaxIterationBudget
 	comment := fmt.Sprintf(
-		"🤖 Implementation exceeded iteration limit. Remaining work decomposed into %d subtasks: %s",
-		len(childNums), formatIssueLinks(childNums),
+		"🤖 **Implementation exceeded iteration limit** (budget: %d)\n\nRemaining work has been decomposed into %d subtasks:\n\n### Subtasks\n%s",
+		budget, len(childNums), formatSubtaskBreakdown(subtasks, childNums),
 	)
 	_ = d.Deps.GitHub.CreateComment(ctx, issueNum, comment)
 
@@ -202,7 +256,11 @@ func (d *DeveloperAgent) reactiveDecompose(ctx context.Context, issueNum int, is
 // processChildIssues fetches and processes each child issue sequentially.
 func (d *DeveloperAgent) processChildIssues(ctx context.Context, childNums []int, parentNum int) error {
 	var failures []int
-	for _, num := range childNums {
+	for i, num := range childNums {
+		// Post progress comment on parent.
+		_ = d.Deps.GitHub.CreateComment(ctx, parentNum,
+			fmt.Sprintf("🤖 Processing subtask %d/%d: #%d", i+1, len(childNums), num))
+
 		issue, err := d.Deps.GitHub.GetIssue(ctx, num)
 		if err != nil {
 			d.logger().Error("failed to fetch child issue", "issue", num, "error", err)
