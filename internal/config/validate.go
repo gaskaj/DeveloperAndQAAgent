@@ -57,5 +57,13 @@ func Validate(cfg *Config) error {
 		cfg.Creativity.MaxRejectionHistory = 50
 	}
 
+	// Decomposition defaults.
+	if cfg.Decomposition.MaxIterationBudget == 0 {
+		cfg.Decomposition.MaxIterationBudget = 15
+	}
+	if cfg.Decomposition.MaxSubtasks == 0 {
+		cfg.Decomposition.MaxSubtasks = 5
+	}
+
 	return errors.Join(errs...)
 }

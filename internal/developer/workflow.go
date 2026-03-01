@@ -62,10 +62,28 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 		labels = append(labels, l.GetName())
 	}
 	issueContext := claude.FormatIssueContext(issueNum, issueTitle, issueBody, labels)
-	plan, err := d.analyze(ctx, issueContext)
+	plan, tooComplex, err := d.analyze(ctx, issueContext)
 	if err != nil {
 		d.failIssue(ctx, ws, fmt.Errorf("analysis failed: %w", err))
 		return err
+	}
+
+	// Step 2.5: Proactive decomposition
+	if tooComplex && d.Deps.Config.Decomposition.Enabled {
+		d.logger().Info("issue too complex, decomposing", "issue", issueNum)
+		childNums, err := d.decompose(ctx, issueNum, issueContext, plan)
+		if err != nil {
+			d.failIssue(ctx, ws, fmt.Errorf("decomposition failed: %w", err))
+			return err
+		}
+		ws.ChildIssues = childNums
+		ws.State = state.StateDecompose
+		ws.UpdatedAt = time.Now()
+		_ = d.Deps.Store.Save(ctx, ws)
+
+		_ = d.processChildIssues(ctx, childNums, issueNum)
+		d.updateStatus(state.StateIdle, 0, "waiting for issues")
+		return nil
 	}
 
 	// Step 3: Setup workspace
@@ -99,6 +117,23 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 	_ = d.Deps.Store.Save(ctx, ws)
 
 	if err := d.implement(ctx, repo, issueContext, plan); err != nil {
+		// Reactive decomposition: if iteration limit hit and decomposition enabled.
+		if claude.IsMaxIterationsError(err) && d.Deps.Config.Decomposition.Enabled {
+			d.logger().Info("iteration limit hit, reactively decomposing", "issue", issueNum)
+			childNums, decompErr := d.reactiveDecompose(ctx, issueNum, issueContext, plan)
+			if decompErr != nil {
+				d.failIssue(ctx, ws, fmt.Errorf("reactive decomposition failed: %w", decompErr))
+				return decompErr
+			}
+			ws.ChildIssues = childNums
+			ws.State = state.StateDecompose
+			ws.UpdatedAt = time.Now()
+			_ = d.Deps.Store.Save(ctx, ws)
+
+			_ = d.processChildIssues(ctx, childNums, issueNum)
+			d.updateStatus(state.StateIdle, 0, "waiting for issues")
+			return nil
+		}
 		d.failIssue(ctx, ws, fmt.Errorf("implementation failed: %w", err))
 		return err
 	}
@@ -177,7 +212,7 @@ func (d *DeveloperAgent) claimIssue(ctx context.Context, number int) error {
 	return nil
 }
 
-func (d *DeveloperAgent) analyze(ctx context.Context, issueContext string) (string, error) {
+func (d *DeveloperAgent) analyze(ctx context.Context, issueContext string) (plan string, tooComplex bool, err error) {
 	conv := claude.NewConversation(
 		d.Deps.Claude,
 		SystemPrompt,
@@ -187,7 +222,24 @@ func (d *DeveloperAgent) analyze(ctx context.Context, issueContext string) (stri
 	)
 
 	prompt := fmt.Sprintf(AnalyzePrompt, issueContext)
-	return conv.Send(ctx, prompt)
+
+	// When decomposition is enabled, append complexity estimation to the prompt.
+	if d.Deps.Config.Decomposition.Enabled {
+		budget := d.Deps.Config.Decomposition.MaxIterationBudget
+		maxSubtasks := d.Deps.Config.Decomposition.MaxSubtasks
+		prompt += fmt.Sprintf(ComplexityEstimatePrompt, budget, maxSubtasks)
+	}
+
+	response, err := conv.Send(ctx, prompt)
+	if err != nil {
+		return "", false, err
+	}
+
+	if d.Deps.Config.Decomposition.Enabled {
+		tooComplex = parseComplexityResult(response)
+	}
+
+	return response, tooComplex, nil
 }
 
 func (d *DeveloperAgent) implement(ctx context.Context, repo *gitops.Repo, issueContext, plan string) error {

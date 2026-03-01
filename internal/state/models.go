@@ -17,6 +17,7 @@ const (
 	StateComplete  WorkflowState = "complete"
 	StateFailed        WorkflowState = "failed"
 	StateCreativeThink WorkflowState = "creative_thinking"
+	StateDecompose     WorkflowState = "decompose"
 )
 
 // AgentWorkState tracks the current work state of an agent.
@@ -28,6 +29,8 @@ type AgentWorkState struct {
 	BranchName   string        `json:"branch_name,omitempty"`
 	WorkspaceDir string        `json:"workspace_dir,omitempty"`
 	PRNumber     int           `json:"pr_number,omitempty"`
+	ParentIssue  int           `json:"parent_issue,omitempty"`
+	ChildIssues  []int         `json:"child_issues,omitempty"`
 	Error        string        `json:"error,omitempty"`
 	UpdatedAt    time.Time     `json:"updated_at"`
 	CreatedAt    time.Time     `json:"created_at"`
