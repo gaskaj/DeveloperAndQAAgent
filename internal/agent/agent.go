@@ -6,6 +6,7 @@ import (
 
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/claude"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/errors"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
@@ -49,6 +50,7 @@ type Dependencies struct {
 	Logger            *slog.Logger
 	StructuredLogger  *observability.StructuredLogger
 	Metrics           *observability.Metrics
+	ErrorManager      *errors.Manager
 }
 
 // BaseAgent provides common functionality for all agents.

@@ -12,6 +12,7 @@ import (
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/claude"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/developer"
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/errors"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/orchestrator"
@@ -47,10 +48,16 @@ func runStart(cmd *cobra.Command, args []string) error {
 	structuredLogger := observability.NewStructuredLogger(cfg.Logging)
 	metrics := observability.NewMetrics(structuredLogger)
 
-	// Initialize dependencies.
-	ghClient := ghub.NewClient(cfg.GitHub.Token, cfg.GitHub.Owner, cfg.GitHub.Repo)
-	claudeClient := claude.NewClient(cfg.Claude.APIKey, cfg.Claude.Model, cfg.Claude.MaxTokens).
+	// Initialize error handling manager
+	errorManager := errors.NewManager(&cfg.ErrorHandling, logger).
 		WithObservability(structuredLogger, metrics)
+
+	// Initialize dependencies.
+	ghClient := ghub.NewClient(cfg.GitHub.Token, cfg.GitHub.Owner, cfg.GitHub.Repo).
+		WithErrorHandling(errorManager)
+	claudeClient := claude.NewClient(cfg.Claude.APIKey, cfg.Claude.Model, cfg.Claude.MaxTokens).
+		WithObservability(structuredLogger, metrics).
+		WithErrorHandling(errorManager)
 
 	store, err := state.NewFileStore(cfg.State.Dir)
 	if err != nil {
@@ -65,6 +72,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 		Logger:           logger,
 		StructuredLogger: structuredLogger,
 		Metrics:          metrics,
+		ErrorManager:     errorManager,
 	}
 
 	// Create enabled agents.

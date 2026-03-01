@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/google/go-github/v68/github"
+	agentErrors "github.com/gaskaj/DeveloperAndQAAgent/internal/errors"
 )
 
 // Client defines the interface for GitHub operations.
@@ -41,9 +42,10 @@ type PROptions struct {
 
 // GitHubClient implements Client using the go-github library.
 type GitHubClient struct {
-	client *github.Client
-	owner  string
-	repo   string
+	client       *github.Client
+	owner        string
+	repo         string
+	errorManager *agentErrors.Manager
 }
 
 // NewClient creates a new GitHubClient.
@@ -54,4 +56,10 @@ func NewClient(token, owner, repo string) *GitHubClient {
 		owner:  owner,
 		repo:   repo,
 	}
+}
+
+// WithErrorHandling adds error handling capabilities to the client
+func (c *GitHubClient) WithErrorHandling(errorManager *agentErrors.Manager) *GitHubClient {
+	c.errorManager = errorManager
+	return c
 }
