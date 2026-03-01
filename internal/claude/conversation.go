@@ -82,21 +82,33 @@ func (c *Conversation) Send(ctx context.Context, userMessage string) (string, er
 			return ExtractText(msg), nil
 		}
 
-		// Count tool calls in this response for logging.
+		// Log assistant thinking and tool summary for this iteration.
+		var assistantText string
 		toolCount := 0
-		var toolNames []string
+		var toolSummaries []string
 		for _, block := range msg.Content {
-			if block.Type == "tool_use" {
+			switch block.Type {
+			case "text":
+				assistantText = block.Text
+			case "tool_use":
 				toolCount++
-				toolNames = append(toolNames, block.Name)
+				toolSummaries = append(toolSummaries, summarizeToolCall(block.Name, block.Input))
 			}
 		}
+		remaining := c.maxIter - i - 1
 		c.logger.Info("iteration progress",
-			"iteration", i+1,
-			"max", c.maxIter,
+			"iteration", fmt.Sprintf("%d/%d", i+1, c.maxIter),
+			"remaining", remaining,
 			"tools_in_response", toolCount,
-			"tool_names", toolNames,
+			"tool_calls", toolSummaries,
 		)
+		if assistantText != "" {
+			// Log a truncated version of the assistant's reasoning.
+			if len(assistantText) > 300 {
+				assistantText = assistantText[:300] + "..."
+			}
+			c.logger.Info("assistant reasoning", "text", assistantText)
+		}
 
 		// Process tool calls.
 		toolResults, err := c.processToolCalls(ctx, msg)
@@ -119,11 +131,12 @@ func (c *Conversation) processToolCalls(ctx context.Context, msg *anthropic.Mess
 			continue
 		}
 
-		c.logger.Info("executing tool", "name", block.Name, "id", block.ID)
+		summary := summarizeToolCall(block.Name, block.Input)
+		c.logger.Info("executing tool", "tool", summary)
 
 		result, err := c.executor(ctx, block.Name, block.Input)
 		if err != nil {
-			c.logger.Error("tool execution failed", "name", block.Name, "error", err)
+			c.logger.Error("tool failed", "tool", summary, "error", err)
 			results = append(results, anthropic.NewToolResultBlock(
 				block.ID,
 				fmt.Sprintf("error: %v", err),
@@ -132,7 +145,9 @@ func (c *Conversation) processToolCalls(ctx context.Context, msg *anthropic.Mess
 			continue
 		}
 
-		results = append(results, anthropic.NewToolResultBlock(block.ID, truncateToolResult(result), false))
+		truncated := truncateToolResult(result)
+		c.logger.Info("tool succeeded", "tool", block.Name, "result_bytes", len(result), "truncated", len(result) != len(truncated))
+		results = append(results, anthropic.NewToolResultBlock(block.ID, truncated, false))
 	}
 
 	return results, nil
@@ -144,6 +159,55 @@ func truncateToolResult(result string) string {
 		return result
 	}
 	return fmt.Sprintf("%s\n\n... (output truncated, showing %d of %d bytes)", result[:maxToolResultLen], maxToolResultLen, len(result))
+}
+
+// summarizeToolCall returns a human-readable one-line summary of a tool call,
+// including the tool name and key parameters (path, pattern, command, etc.).
+func summarizeToolCall(name string, input json.RawMessage) string {
+	var params map[string]interface{}
+	if err := json.Unmarshal(input, &params); err != nil {
+		return name
+	}
+
+	switch name {
+	case "read_file":
+		return fmt.Sprintf("read_file(%s)", paramStr(params, "path"))
+	case "edit_file":
+		old := paramStr(params, "old_string")
+		if len(old) > 60 {
+			old = old[:60] + "..."
+		}
+		return fmt.Sprintf("edit_file(%s, %q)", paramStr(params, "path"), old)
+	case "write_file":
+		contentLen := len(paramStr(params, "content"))
+		return fmt.Sprintf("write_file(%s, %d bytes)", paramStr(params, "path"), contentLen)
+	case "search_files":
+		p := paramStr(params, "path")
+		if p != "" {
+			return fmt.Sprintf("search_files(%q, path=%s)", paramStr(params, "pattern"), p)
+		}
+		return fmt.Sprintf("search_files(%q)", paramStr(params, "pattern"))
+	case "list_files":
+		return fmt.Sprintf("list_files(%s)", paramStr(params, "path"))
+	case "run_command":
+		cmd := paramStr(params, "command")
+		if len(cmd) > 80 {
+			cmd = cmd[:80] + "..."
+		}
+		return fmt.Sprintf("run_command(%q)", cmd)
+	default:
+		return name
+	}
+}
+
+// paramStr extracts a string parameter from a parsed JSON map.
+func paramStr(params map[string]interface{}, key string) string {
+	if v, ok := params[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
 }
 
 func assistantMessageFromResponse(msg *anthropic.Message) anthropic.MessageParam {
