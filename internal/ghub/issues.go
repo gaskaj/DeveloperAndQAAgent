@@ -5,10 +5,23 @@ import (
 	"fmt"
 
 	"github.com/google/go-github/v68/github"
+	agentErrors "github.com/gaskaj/DeveloperAndQAAgent/internal/errors"
 )
 
 // ListIssues returns open issues matching the given labels.
 func (c *GitHubClient) ListIssues(ctx context.Context, labels []string) ([]*github.Issue, error) {
+	if c.errorManager != nil {
+		retryer := c.errorManager.GetRetryer("github_api")
+		return agentErrors.Execute(ctx, retryer, func(ctx context.Context, attempt int) ([]*github.Issue, error) {
+			return c.listIssuesCore(ctx, labels)
+		})
+	}
+	
+	return c.listIssuesCore(ctx, labels)
+}
+
+// listIssuesCore contains the core listing logic
+func (c *GitHubClient) listIssuesCore(ctx context.Context, labels []string) ([]*github.Issue, error) {
 	opts := &github.IssueListByRepoOptions{
 		State:  "open",
 		Labels: labels,
@@ -19,7 +32,7 @@ func (c *GitHubClient) ListIssues(ctx context.Context, labels []string) ([]*gith
 
 	issues, _, err := c.client.Issues.ListByRepo(ctx, c.owner, c.repo, opts)
 	if err != nil {
-		return nil, fmt.Errorf("listing issues: %w", err)
+		return nil, agentErrors.ClassifyError(fmt.Errorf("listing issues: %w", err))
 	}
 
 	// Filter out pull requests (GitHub API returns them as issues too).
@@ -35,9 +48,21 @@ func (c *GitHubClient) ListIssues(ctx context.Context, labels []string) ([]*gith
 
 // GetIssue retrieves a single issue by number.
 func (c *GitHubClient) GetIssue(ctx context.Context, number int) (*github.Issue, error) {
+	if c.errorManager != nil {
+		retryer := c.errorManager.GetRetryer("github_api")
+		return agentErrors.Execute(ctx, retryer, func(ctx context.Context, attempt int) (*github.Issue, error) {
+			return c.getIssueCore(ctx, number)
+		})
+	}
+	
+	return c.getIssueCore(ctx, number)
+}
+
+// getIssueCore contains the core issue retrieval logic
+func (c *GitHubClient) getIssueCore(ctx context.Context, number int) (*github.Issue, error) {
 	issue, _, err := c.client.Issues.Get(ctx, c.owner, c.repo, number)
 	if err != nil {
-		return nil, fmt.Errorf("getting issue #%d: %w", number, err)
+		return nil, agentErrors.ClassifyError(fmt.Errorf("getting issue #%d: %w", number, err))
 	}
 	return issue, nil
 }
@@ -85,6 +110,18 @@ func (c *GitHubClient) AddLabels(ctx context.Context, number int, labels []strin
 
 // CreateIssue creates a new issue with the given title, body, and labels.
 func (c *GitHubClient) CreateIssue(ctx context.Context, title, body string, labels []string) (*github.Issue, error) {
+	if c.errorManager != nil {
+		retryer := c.errorManager.GetRetryer("github_api")
+		return agentErrors.Execute(ctx, retryer, func(ctx context.Context, attempt int) (*github.Issue, error) {
+			return c.createIssueCore(ctx, title, body, labels)
+		})
+	}
+	
+	return c.createIssueCore(ctx, title, body, labels)
+}
+
+// createIssueCore contains the core issue creation logic
+func (c *GitHubClient) createIssueCore(ctx context.Context, title, body string, labels []string) (*github.Issue, error) {
 	req := &github.IssueRequest{
 		Title:  &title,
 		Body:   &body,
@@ -93,7 +130,7 @@ func (c *GitHubClient) CreateIssue(ctx context.Context, title, body string, labe
 
 	issue, _, err := c.client.Issues.Create(ctx, c.owner, c.repo, req)
 	if err != nil {
-		return nil, fmt.Errorf("creating issue: %w", err)
+		return nil, agentErrors.ClassifyError(fmt.Errorf("creating issue: %w", err))
 	}
 	return issue, nil
 }

@@ -60,3 +60,69 @@ decomposition:
   max_iteration_budget: 25
   # Maximum number of subtasks when decomposing
   max_subtasks: 5
+
+error_handling:
+  retry:
+    # Enable retry mechanisms (disabled by default for safety)
+    enabled: true
+    # Default retry policy
+    default:
+      max_attempts: 3
+      base_delay: "1s"
+      max_delay: "30s"
+      backoff_factor: 2.0
+      jitter_factor: 0.1
+      retryable_errors:
+        - "network"
+        - "timeout"
+        - "api"
+        - "temporary"
+    # Operation-specific policies
+    policies:
+      github_api:
+        max_attempts: 5
+        base_delay: "2s"
+        max_delay: "60s"
+        backoff_factor: 2.0
+        jitter_factor: 0.2
+        retryable_errors:
+          - "network"
+          - "timeout"
+          - "api"
+          - "temporary"
+      claude_api:
+        max_attempts: 3
+        base_delay: "1s"
+        max_delay: "30s"
+        backoff_factor: 2.0
+        jitter_factor: 0.1
+        retryable_errors:
+          - "network"
+          - "timeout"
+          - "api"
+          - "temporary"
+
+  circuit_breaker:
+    # Enable circuit breakers (disabled by default for safety)
+    enabled: true
+    # Default configuration
+    default:
+      max_failures: 5
+      timeout: "60s"
+      max_requests: 3
+      failure_ratio: 0.6
+      min_requests: 10
+    # Service-specific configurations
+    breakers:
+      github_api:
+        max_failures: 10
+        timeout: "120s"
+        max_requests: 5
+        failure_ratio: 0.7
+        min_requests: 20
+      claude_api:
+        max_failures: 5
+        timeout: "60s"
+        max_requests: 3
+        failure_ratio: 0.5
+        min_requests: 10

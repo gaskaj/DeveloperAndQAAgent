@@ -20,6 +20,7 @@ type Config struct {
 	Observability ObservabilityConfig `mapstructure:"observability"`
 	Creativity    CreativityConfig    `mapstructure:"creativity"`
 	Decomposition DecompositionConfig `mapstructure:"decomposition"`
+	ErrorHandling ErrorHandlingConfig `mapstructure:"error_handling"`
 }
 
 // GitHubConfig holds GitHub-related configuration.
@@ -138,6 +139,45 @@ type DecompositionConfig struct {
 	Enabled            bool `mapstructure:"enabled"`
 	MaxIterationBudget int  `mapstructure:"max_iteration_budget"`
 	MaxSubtasks        int  `mapstructure:"max_subtasks"`
+}
+
+// ErrorHandlingConfig holds configuration for error handling and retry mechanisms.
+type ErrorHandlingConfig struct {
+	Retry         RetryConfig         `mapstructure:"retry"`
+	CircuitBreaker CircuitBreakerGroupConfig `mapstructure:"circuit_breaker"`
+}
+
+// RetryConfig holds global retry configuration.
+type RetryConfig struct {
+	Enabled       bool                       `mapstructure:"enabled"`
+	DefaultPolicy RetryPolicyConfig          `mapstructure:"default"`
+	Policies      map[string]RetryPolicyConfig `mapstructure:"policies"`
+}
+
+// RetryPolicyConfig holds retry policy configuration.
+type RetryPolicyConfig struct {
+	MaxAttempts     int           `mapstructure:"max_attempts"`
+	BaseDelay       time.Duration `mapstructure:"base_delay"`
+	MaxDelay        time.Duration `mapstructure:"max_delay"`
+	BackoffFactor   float64       `mapstructure:"backoff_factor"`
+	JitterFactor    float64       `mapstructure:"jitter_factor"`
+	RetryableErrors []string      `mapstructure:"retryable_errors"`
+}
+
+// CircuitBreakerGroupConfig holds configuration for multiple circuit breakers.
+type CircuitBreakerGroupConfig struct {
+	Enabled      bool                              `mapstructure:"enabled"`
+	DefaultConfig CircuitBreakerConfigSpec          `mapstructure:"default"`
+	Breakers     map[string]CircuitBreakerConfigSpec `mapstructure:"breakers"`
+}
+
+// CircuitBreakerConfigSpec holds circuit breaker configuration.
+type CircuitBreakerConfigSpec struct {
+	MaxFailures  int64         `mapstructure:"max_failures"`
+	Timeout      time.Duration `mapstructure:"timeout"`
+	MaxRequests  int64         `mapstructure:"max_requests"`
+	FailureRatio float64       `mapstructure:"failure_ratio"`
+	MinRequests  int64         `mapstructure:"min_requests"`
 }
 
 // Load reads configuration from the given file path, expanding environment variables.

@@ -184,3 +184,72 @@ func (sl *StructuredLogger) LogPerformanceMetric(ctx context.Context, metricName
 
 	sl.WithCorrelation(ctx).LogAttrs(context.Background(), slog.LevelInfo, "performance_metric", attrs...)
 }
+
+// LogRetryAttempt logs a retry attempt with context
+func (sl *StructuredLogger) LogRetryAttempt(ctx context.Context, operation string, attempt, maxAttempts int) {
+	sl.WithCorrelation(ctx).Debug("retry_attempt",
+		"operation", operation,
+		"attempt", attempt,
+		"max_attempts", maxAttempts,
+		"timestamp", time.Now(),
+	)
+}
+
+// LogRetrySuccess logs a successful operation after retries
+func (sl *StructuredLogger) LogRetrySuccess(ctx context.Context, operation string, attempts int) {
+	sl.WithCorrelation(ctx).Info("retry_success",
+		"operation", operation,
+		"attempts", attempts,
+		"timestamp", time.Now(),
+	)
+}
+
+// LogRetryExhausted logs when all retry attempts have been exhausted
+func (sl *StructuredLogger) LogRetryExhausted(ctx context.Context, operation string, attempts int, err error) {
+	sl.WithCorrelation(ctx).Error("retry_exhausted",
+		"operation", operation,
+		"attempts", attempts,
+		"error", err.Error(),
+		"timestamp", time.Now(),
+	)
+}
+
+// LogRetryNonRetryable logs when an operation fails with a non-retryable error
+func (sl *StructuredLogger) LogRetryNonRetryable(ctx context.Context, operation string, attempt int, err error) {
+	sl.WithCorrelation(ctx).Warn("retry_non_retryable",
+		"operation", operation,
+		"attempt", attempt,
+		"error", err.Error(),
+		"timestamp", time.Now(),
+	)
+}
+
+// LogRetryDelay logs the delay before a retry attempt
+func (sl *StructuredLogger) LogRetryDelay(ctx context.Context, operation string, attempt int, delay time.Duration, err error) {
+	sl.WithCorrelation(ctx).Debug("retry_delay",
+		"operation", operation,
+		"attempt", attempt,
+		"delay_ms", delay.Milliseconds(),
+		"error", err.Error(),
+		"timestamp", time.Now(),
+	)
+}
+
+// LogCircuitBreakerStateChange logs circuit breaker state transitions
+func (sl *StructuredLogger) LogCircuitBreakerStateChange(ctx context.Context, name, fromState, toState string) {
+	sl.WithCorrelation(ctx).Info("circuit_breaker_state_change",
+		"name", name,
+		"from_state", fromState,
+		"to_state", toState,
+		"timestamp", time.Now(),
+	)
+}
+
+// LogCircuitBreakerRejection logs when a circuit breaker rejects a request
+func (sl *StructuredLogger) LogCircuitBreakerRejection(ctx context.Context, name, state string) {
+	sl.WithCorrelation(ctx).Warn("circuit_breaker_rejection",
+		"name", name,
+		"state", state,
+		"timestamp", time.Now(),
+	)
+}

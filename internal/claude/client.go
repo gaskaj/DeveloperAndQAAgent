@@ -7,6 +7,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	agentErrors "github.com/gaskaj/DeveloperAndQAAgent/internal/errors"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
 )
 
@@ -17,6 +18,7 @@ type Client struct {
 	maxTokens        int
 	structuredLogger *observability.StructuredLogger
 	metrics          *observability.Metrics
+	errorManager     *agentErrors.Manager
 }
 
 // NewClient creates a new Claude API client.
@@ -36,8 +38,36 @@ func (c *Client) WithObservability(logger *observability.StructuredLogger, metri
 	return c
 }
 
+// WithErrorHandling adds error handling capabilities to the client
+func (c *Client) WithErrorHandling(errorManager *agentErrors.Manager) *Client {
+	c.errorManager = errorManager
+	return c
+}
+
 // SendMessage sends a single message to Claude and returns the text response.
 func (c *Client) SendMessage(ctx context.Context, system string, messages []anthropic.MessageParam) (*anthropic.Message, error) {
+	if c.errorManager != nil {
+		// Use retry with circuit breaker protection
+		retryer := c.errorManager.GetRetryer("claude_api")
+		circuitBreaker := c.errorManager.GetCircuitBreaker("claude_api")
+		
+		var result *anthropic.Message
+		err := circuitBreaker.Execute(ctx, func(ctx context.Context) error {
+			var err error
+			result, err = agentErrors.Execute(ctx, retryer, func(ctx context.Context, attempt int) (*anthropic.Message, error) {
+				return c.sendMessageCore(ctx, system, messages)
+			})
+			return err
+		})
+		
+		return result, err
+	}
+	
+	return c.sendMessageCore(ctx, system, messages)
+}
+
+// sendMessageCore contains the core message sending logic
+func (c *Client) sendMessageCore(ctx context.Context, system string, messages []anthropic.MessageParam) (*anthropic.Message, error) {
 	start := time.Now()
 	
 	params := anthropic.MessageNewParams{
@@ -77,13 +107,27 @@ func (c *Client) SendMessage(ctx context.Context, system string, messages []anth
 	}
 	
 	if err != nil {
-		return nil, fmt.Errorf("claude API call: %w", err)
+		// Classify the error for proper retry handling
+		return nil, agentErrors.ClassifyError(fmt.Errorf("claude API call: %w", err))
 	}
 	return response, nil
 }
 
 // SendMessageWithTools sends a message with tool definitions and returns the response.
 func (c *Client) SendMessageWithTools(ctx context.Context, system string, messages []anthropic.MessageParam, tools []anthropic.ToolUnionParam) (*anthropic.Message, error) {
+	if c.errorManager != nil {
+		// Use retry protection
+		retryer := c.errorManager.GetRetryer("claude_api")
+		return agentErrors.Execute(ctx, retryer, func(ctx context.Context, attempt int) (*anthropic.Message, error) {
+			return c.sendMessageWithToolsCore(ctx, system, messages, tools)
+		})
+	}
+	
+	return c.sendMessageWithToolsCore(ctx, system, messages, tools)
+}
+
+// sendMessageWithToolsCore contains the core message with tools sending logic
+func (c *Client) sendMessageWithToolsCore(ctx context.Context, system string, messages []anthropic.MessageParam, tools []anthropic.ToolUnionParam) (*anthropic.Message, error) {
 	start := time.Now()
 	
 	params := anthropic.MessageNewParams{
@@ -123,7 +167,8 @@ func (c *Client) SendMessageWithTools(ctx context.Context, system string, messag
 	}
 	
 	if err != nil {
-		return nil, fmt.Errorf("claude API call with tools: %w", err)
+		// Classify the error for proper retry handling
+		return nil, agentErrors.ClassifyError(fmt.Errorf("claude API call with tools: %w", err))
 	}
 	return response, nil
 }

@@ -63,3 +63,79 @@ decomposition:
   max_iteration_budget: 25
   # Maximum number of subtasks when decomposing an issue.
   max_subtasks: 5
+
+error_handling:
+  retry:
+    # Enable retry mechanisms across agent communications
+    enabled: true
+    # Default retry policy applied when no specific policy is defined
+    default:
+      max_attempts: 3
+      base_delay: "1s"
+      max_delay: "30s"
+      backoff_factor: 2.0
+      jitter_factor: 0.1
+      retryable_errors:
+        - "network"
+        - "timeout"
+        - "api"
+        - "temporary"
+    # Operation-specific retry policies
+    policies:
+      github_api:
+        max_attempts: 5
+        base_delay: "2s"
+        max_delay: "60s"
+        backoff_factor: 2.0
+        jitter_factor: 0.2
+        retryable_errors:
+          - "network"
+          - "timeout"
+          - "api"
+          - "temporary"
+      claude_api:
+        max_attempts: 3
+        base_delay: "1s"
+        max_delay: "30s"
+        backoff_factor: 2.0
+        jitter_factor: 0.1
+        retryable_errors:
+          - "network"
+          - "timeout"
+          - "api"
+          - "temporary"
+      rate_limited:
+        max_attempts: 3
+        base_delay: "60s"
+        max_delay: "300s"
+        backoff_factor: 1.5
+        jitter_factor: 0.1
+        retryable_errors:
+          - "rate_limit"
+          - "api"
+          - "temporary"
+
+  circuit_breaker:
+    # Enable circuit breakers for external dependencies
+    enabled: true
+    # Default circuit breaker configuration
+    default:
+      max_failures: 5
+      timeout: "60s"
+      max_requests: 3
+      failure_ratio: 0.6
+      min_requests: 10
+    # Service-specific circuit breaker configurations
+    breakers:
+      github_api:
+        max_failures: 10
+        timeout: "120s"
+        max_requests: 5
+        failure_ratio: 0.7
+        min_requests: 20
+      claude_api:
+        max_failures: 5
+        timeout: "60s"
+        max_requests: 3
+        failure_ratio: 0.5
+        min_requests: 10
