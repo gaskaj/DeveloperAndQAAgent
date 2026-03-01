@@ -13,11 +13,12 @@ type EventHandler func(ctx context.Context, issues []*github.Issue) error
 
 // Poller polls GitHub for new issues at a regular interval.
 type Poller struct {
-	client   Client
-	labels   []string
-	interval time.Duration
-	handler  EventHandler
-	logger   *slog.Logger
+	client      Client
+	labels      []string
+	interval    time.Duration
+	handler     EventHandler
+	IdleHandler func(ctx context.Context) error
+	logger      *slog.Logger
 }
 
 // NewPoller creates a new Poller.
@@ -60,6 +61,11 @@ func (p *Poller) poll(ctx context.Context) error {
 	}
 
 	if len(issues) == 0 {
+		if p.IdleHandler != nil {
+			if err := p.IdleHandler(ctx); err != nil {
+				p.logger.Error("idle handler failed", "error", err)
+			}
+		}
 		return nil
 	}
 

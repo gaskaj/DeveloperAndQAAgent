@@ -60,6 +60,21 @@ func (c *GitHubClient) AddLabels(ctx context.Context, number int, labels []strin
 	return nil
 }
 
+// CreateIssue creates a new issue with the given title, body, and labels.
+func (c *GitHubClient) CreateIssue(ctx context.Context, title, body string, labels []string) (*github.Issue, error) {
+	req := &github.IssueRequest{
+		Title:  &title,
+		Body:   &body,
+		Labels: &labels,
+	}
+
+	issue, _, err := c.client.Issues.Create(ctx, c.owner, c.repo, req)
+	if err != nil {
+		return nil, fmt.Errorf("creating issue: %w", err)
+	}
+	return issue, nil
+}
+
 // RemoveLabel removes a label from an issue.
 func (c *GitHubClient) RemoveLabel(ctx context.Context, number int, label string) error {
 	_, err := c.client.Issues.RemoveLabelForIssue(ctx, c.owner, c.repo, number, label)

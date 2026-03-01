@@ -51,6 +51,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	enc.SetIndent("", "  ")
 
 	for _, s := range states {
+		if s.State == state.StateCreativeThink {
+			fmt.Printf("[%s] Creative thinking — generating improvement suggestions\n", s.AgentType)
+		}
 		if err := enc.Encode(s); err != nil {
 			return fmt.Errorf("encoding state: %w", err)
 		}

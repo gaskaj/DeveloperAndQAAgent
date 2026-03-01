@@ -43,5 +43,19 @@ func Validate(cfg *Config) error {
 		cfg.Agents.Developer.WorkspaceDir = "./workspaces"
 	}
 
+	// Creativity defaults.
+	if cfg.Creativity.IdleThresholdSeconds == 0 {
+		cfg.Creativity.IdleThresholdSeconds = 120
+	}
+	if cfg.Creativity.SuggestionCooldownSeconds == 0 {
+		cfg.Creativity.SuggestionCooldownSeconds = 300
+	}
+	if cfg.Creativity.MaxPendingSuggestions == 0 {
+		cfg.Creativity.MaxPendingSuggestions = 1
+	}
+	if cfg.Creativity.MaxRejectionHistory == 0 {
+		cfg.Creativity.MaxRejectionHistory = 50
+	}
+
 	return errors.Join(errs...)
 }

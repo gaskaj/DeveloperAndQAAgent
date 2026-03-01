@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/agent"
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/creativity"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
 )
@@ -35,6 +36,25 @@ func New(deps agent.Dependencies) (agent.Agent, error) {
 		da.handleIssues,
 		deps.Logger,
 	)
+
+	// Wire up creativity engine as idle handler when enabled.
+	if deps.Config.Creativity.Enabled {
+		ghAdapter := creativity.NewGitHubAdapter(deps.GitHub)
+		aiAdapter := creativity.NewClaudeAdapter(deps.Claude)
+		engine := creativity.NewCreativityEngine(
+			ghAdapter,
+			aiAdapter,
+			deps.Config.Creativity,
+			string(agent.TypeDeveloper),
+			deps.Logger.With("component", "creativity"),
+		)
+
+		da.poller.IdleHandler = func(ctx context.Context) error {
+			da.updateStatus(state.StateCreativeThink, 0, "generating improvement suggestions")
+			defer da.updateStatus(state.StateIdle, 0, "waiting for issues")
+			return engine.Run(ctx)
+		}
+	}
 
 	return da, nil
 }

@@ -11,11 +11,12 @@ import (
 
 // Config holds all configuration for the application.
 type Config struct {
-	GitHub  GitHubConfig  `mapstructure:"github"`
-	Claude  ClaudeConfig  `mapstructure:"claude"`
-	Agents  AgentsConfig  `mapstructure:"agents"`
-	State   StateConfig   `mapstructure:"state"`
-	Logging LoggingConfig `mapstructure:"logging"`
+	GitHub     GitHubConfig     `mapstructure:"github"`
+	Claude     ClaudeConfig     `mapstructure:"claude"`
+	Agents     AgentsConfig     `mapstructure:"agents"`
+	State      StateConfig      `mapstructure:"state"`
+	Logging    LoggingConfig    `mapstructure:"logging"`
+	Creativity CreativityConfig `mapstructure:"creativity"`
 }
 
 // GitHubConfig holds GitHub-related configuration.
@@ -55,6 +56,15 @@ type StateConfig struct {
 // LoggingConfig holds logging configuration.
 type LoggingConfig struct {
 	Level string `mapstructure:"level"`
+}
+
+// CreativityConfig holds configuration for the creativity engine.
+type CreativityConfig struct {
+	Enabled                   bool `mapstructure:"enabled"`
+	IdleThresholdSeconds      int  `mapstructure:"idle_threshold_seconds"`
+	SuggestionCooldownSeconds int  `mapstructure:"suggestion_cooldown_seconds"`
+	MaxPendingSuggestions     int  `mapstructure:"max_pending_suggestions"`
+	MaxRejectionHistory       int  `mapstructure:"max_rejection_history"`
 }
 
 // Load reads configuration from the given file path, expanding environment variables.

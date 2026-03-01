@@ -22,6 +22,9 @@ type Client interface {
 	CreatePR(ctx context.Context, opts PROptions) (*github.PullRequest, error)
 	ListPRs(ctx context.Context, state string) ([]*github.PullRequest, error)
 
+	// Issues (create)
+	CreateIssue(ctx context.Context, title, body string, labels []string) (*github.Issue, error)
+
 	// Comments
 	CreateComment(ctx context.Context, number int, body string) error
 	ListComments(ctx context.Context, number int) ([]*github.IssueComment, error)

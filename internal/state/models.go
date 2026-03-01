@@ -15,7 +15,8 @@ const (
 	StatePR        WorkflowState = "pr"
 	StateReview    WorkflowState = "review"
 	StateComplete  WorkflowState = "complete"
-	StateFailed    WorkflowState = "failed"
+	StateFailed        WorkflowState = "failed"
+	StateCreativeThink WorkflowState = "creative_thinking"
 )
 
 // AgentWorkState tracks the current work state of an agent.

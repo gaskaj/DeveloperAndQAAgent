@@ -42,7 +42,7 @@ logging:
   level: "info"
 
 creativity:
-  # Enable autonomous creativity mode when idle
+  # Enable autonomous creativity mode when idle (disabled by default for safety)
   enabled: false
   # Seconds idle before entering creativity mode
   idle_threshold_seconds: 120
