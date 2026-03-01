@@ -11,11 +11,13 @@ import (
 
 // Config holds all configuration for the application.
 type Config struct {
-	GitHub     GitHubConfig     `mapstructure:"github"`
-	Claude     ClaudeConfig     `mapstructure:"claude"`
-	Agents     AgentsConfig     `mapstructure:"agents"`
-	State      StateConfig      `mapstructure:"state"`
-	Logging    LoggingConfig    `mapstructure:"logging"`
+	GitHub        GitHubConfig        `mapstructure:"github"`
+	Claude        ClaudeConfig        `mapstructure:"claude"`
+	Agents        AgentsConfig        `mapstructure:"agents"`
+	State         StateConfig         `mapstructure:"state"`
+	Logging       LoggingConfig       `mapstructure:"logging"`
+	Metrics       MetricsConfig       `mapstructure:"metrics"`
+	Observability ObservabilityConfig `mapstructure:"observability"`
 	Creativity    CreativityConfig    `mapstructure:"creativity"`
 	Decomposition DecompositionConfig `mapstructure:"decomposition"`
 }
@@ -56,7 +58,70 @@ type StateConfig struct {
 
 // LoggingConfig holds logging configuration.
 type LoggingConfig struct {
-	Level string `mapstructure:"level"`
+	Level              string                    `mapstructure:"level"`
+	Format             string                    `mapstructure:"format"`
+	EnableCorrelation  bool                      `mapstructure:"enable_correlation"`
+	Sampling           LoggingSamplingConfig     `mapstructure:"sampling"`
+	Components         map[string]string         `mapstructure:"components"`
+}
+
+// LoggingSamplingConfig holds log sampling configuration.
+type LoggingSamplingConfig struct {
+	Enabled bool    `mapstructure:"enabled"`
+	Rate    float64 `mapstructure:"rate"`
+}
+
+// MetricsConfig holds metrics collection configuration.
+type MetricsConfig struct {
+	Enabled            bool                      `mapstructure:"enabled"`
+	CollectionInterval time.Duration             `mapstructure:"collection_interval"`
+	Export             MetricsExportConfig       `mapstructure:"export"`
+}
+
+// MetricsExportConfig holds metrics export configuration.
+type MetricsExportConfig struct {
+	Prometheus PrometheusConfig `mapstructure:"prometheus"`
+	Logs       LogsExportConfig `mapstructure:"logs"`
+}
+
+// PrometheusConfig holds Prometheus metrics export configuration.
+type PrometheusConfig struct {
+	Enabled bool   `mapstructure:"enabled"`
+	Port    int    `mapstructure:"port"`
+	Path    string `mapstructure:"path"`
+}
+
+// LogsExportConfig holds log-based metrics export configuration.
+type LogsExportConfig struct {
+	Enabled  bool          `mapstructure:"enabled"`
+	Interval time.Duration `mapstructure:"interval"`
+}
+
+// ObservabilityConfig holds observability features configuration.
+type ObservabilityConfig struct {
+	Tracing     TracingConfig     `mapstructure:"tracing"`
+	Health      HealthConfig      `mapstructure:"health"`
+	Performance PerformanceConfig `mapstructure:"performance"`
+}
+
+// TracingConfig holds distributed tracing configuration.
+type TracingConfig struct {
+	Enabled    bool    `mapstructure:"enabled"`
+	SampleRate float64 `mapstructure:"sample_rate"`
+}
+
+// HealthConfig holds health check configuration.
+type HealthConfig struct {
+	Enabled bool   `mapstructure:"enabled"`
+	Port    int    `mapstructure:"port"`
+	Path    string `mapstructure:"path"`
+}
+
+// PerformanceConfig holds performance monitoring configuration.
+type PerformanceConfig struct {
+	TrackDurations     bool          `mapstructure:"track_durations"`
+	MemoryMonitoring   bool          `mapstructure:"memory_monitoring"`
+	Interval           time.Duration `mapstructure:"interval"`
 }
 
 // CreativityConfig holds configuration for the creativity engine.

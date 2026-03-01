@@ -8,6 +8,7 @@ import (
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/agent"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/creativity"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
 )
 
@@ -66,12 +67,39 @@ func (d *DeveloperAgent) Type() agent.AgentType {
 
 // Run starts the developer agent's polling loop.
 func (d *DeveloperAgent) Run(ctx context.Context) error {
+	// Ensure correlation ID for this agent run
+	ctx = observability.EnsureCorrelationID(ctx)
+	
+	// Log agent start with structured logging
+	if d.Deps.StructuredLogger != nil {
+		d.Deps.StructuredLogger.LogAgentStart(ctx, string(d.Type()), "developer agent started")
+	}
 	d.Deps.Logger.Info("developer agent started")
+
+	// Start timing for agent lifecycle
+	var timer *observability.Timer
+	if d.Deps.Metrics != nil {
+		timer = d.Deps.Metrics.Timer("agent_lifecycle", map[string]string{
+			"agent_type": string(d.Type()),
+		})
+	}
 
 	// Start heartbeat in background.
 	go agent.Heartbeat(ctx, d.Type(), 60*time.Second, d.Deps.Logger)
 
-	return d.poller.Run(ctx)
+	err := d.poller.Run(ctx)
+	
+	// Log agent stop with metrics
+	var duration time.Duration
+	if timer != nil {
+		duration = timer.StopWithContext(ctx, "agent_lifecycle")
+	}
+	
+	if d.Deps.StructuredLogger != nil {
+		d.Deps.StructuredLogger.LogAgentStop(ctx, string(d.Type()), duration, err)
+	}
+	
+	return err
 }
 
 // Status returns the current agent status.

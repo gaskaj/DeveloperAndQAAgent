@@ -1,0 +1,68 @@
+# Logging configuration for structured logging and observability
+logging:
+  # Log level: debug, info, warn, error
+  level: info
+  
+  # Output format: json, text
+  format: json
+  
+  # Enable correlation ID tracking
+  enable_correlation: true
+  
+  # Log sampling (for high-volume environments)
+  sampling:
+    enabled: false
+    rate: 0.1  # Sample 10% of logs
+  
+  # Component-specific log levels
+  components:
+    agent: info
+    developer: info
+    claude: info
+    github: info
+    orchestrator: info
+    creativity: info
+    observability: debug
+
+# Metrics configuration
+metrics:
+  # Enable metrics collection
+  enabled: true
+  
+  # Metrics collection interval
+  collection_interval: 30s
+  
+  # Export configuration
+  export:
+    # Prometheus-compatible metrics endpoint
+    prometheus:
+      enabled: true
+      port: 8080
+      path: /metrics
+    
+    # Log-based metrics export
+    logs:
+      enabled: true
+      interval: 60s
+
+# Observability features
+observability:
+  # Enable distributed tracing
+  tracing:
+    enabled: true
+    sample_rate: 0.1
+  
+  # Health check configuration
+  health:
+    enabled: true
+    port: 8080
+    path: /health
+    
+  # Performance monitoring
+  performance:
+    # Track operation durations
+    track_durations: true
+    
+    # Memory usage monitoring
+    memory_monitoring: true
+    interval: 30s

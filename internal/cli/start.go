@@ -13,6 +13,7 @@ import (
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/developer"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/orchestrator"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
 	"github.com/spf13/cobra"
@@ -42,9 +43,14 @@ func runStart(cmd *cobra.Command, args []string) error {
 	logger := setupLogger(cfg.Logging.Level)
 	logger.Info("starting agentctl", "config", cfgFile)
 
+	// Initialize observability components
+	structuredLogger := observability.NewStructuredLogger(cfg.Logging)
+	metrics := observability.NewMetrics(structuredLogger)
+
 	// Initialize dependencies.
 	ghClient := ghub.NewClient(cfg.GitHub.Token, cfg.GitHub.Owner, cfg.GitHub.Repo)
-	claudeClient := claude.NewClient(cfg.Claude.APIKey, cfg.Claude.Model, cfg.Claude.MaxTokens)
+	claudeClient := claude.NewClient(cfg.Claude.APIKey, cfg.Claude.Model, cfg.Claude.MaxTokens).
+		WithObservability(structuredLogger, metrics)
 
 	store, err := state.NewFileStore(cfg.State.Dir)
 	if err != nil {
@@ -52,11 +58,13 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 
 	deps := agent.Dependencies{
-		Config: cfg,
-		GitHub: ghClient,
-		Claude: claudeClient,
-		Store:  store,
-		Logger: logger,
+		Config:           cfg,
+		GitHub:           ghClient,
+		Claude:           claudeClient,
+		Store:            store,
+		Logger:           logger,
+		StructuredLogger: structuredLogger,
+		Metrics:          metrics,
 	}
 
 	// Create enabled agents.
@@ -81,7 +89,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	logger.Info("agents starting", "count", len(agents))
 
 	// Run orchestrator.
-	orch := orchestrator.New(agents, logger)
+	orch := orchestrator.New(agents, logger).WithObservability(structuredLogger, metrics)
 	if err := orch.Run(ctx); err != nil && ctx.Err() == nil {
 		return fmt.Errorf("orchestrator error: %w", err)
 	}

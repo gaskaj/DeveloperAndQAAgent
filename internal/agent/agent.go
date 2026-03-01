@@ -7,6 +7,7 @@ import (
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/claude"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
 )
 
@@ -41,11 +42,13 @@ type StatusReport struct {
 
 // Dependencies holds shared dependencies injected into agents.
 type Dependencies struct {
-	Config *config.Config
-	GitHub ghub.Client
-	Claude *claude.Client
-	Store  state.Store
-	Logger *slog.Logger
+	Config            *config.Config
+	GitHub            ghub.Client
+	Claude            *claude.Client
+	Store             state.Store
+	Logger            *slog.Logger
+	StructuredLogger  *observability.StructuredLogger
+	Metrics           *observability.Metrics
 }
 
 // BaseAgent provides common functionality for all agents.

@@ -3,16 +3,20 @@ package claude
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
 )
 
 // Client wraps the Anthropic SDK for Claude API interactions.
 type Client struct {
-	sdk       anthropic.Client
-	model     string
-	maxTokens int
+	sdk              anthropic.Client
+	model            string
+	maxTokens        int
+	structuredLogger *observability.StructuredLogger
+	metrics          *observability.Metrics
 }
 
 // NewClient creates a new Claude API client.
@@ -25,8 +29,17 @@ func NewClient(apiKey, model string, maxTokens int) *Client {
 	}
 }
 
+// WithObservability adds observability features to the client
+func (c *Client) WithObservability(logger *observability.StructuredLogger, metrics *observability.Metrics) *Client {
+	c.structuredLogger = logger
+	c.metrics = metrics
+	return c
+}
+
 // SendMessage sends a single message to Claude and returns the text response.
 func (c *Client) SendMessage(ctx context.Context, system string, messages []anthropic.MessageParam) (*anthropic.Message, error) {
+	start := time.Now()
+	
 	params := anthropic.MessageNewParams{
 		Model:     anthropic.Model(c.model),
 		MaxTokens: int64(c.maxTokens),
@@ -38,15 +51,41 @@ func (c *Client) SendMessage(ctx context.Context, system string, messages []anth
 		}
 	}
 
-	msg, err := c.sdk.Messages.New(ctx, params)
+	response, err := c.sdk.Messages.New(ctx, params)
+	duration := time.Since(start)
+	
+	// Calculate token counts (approximation for input)
+	inputTokens := c.estimateTokens(system, messages)
+	outputTokens := 0
+	if response != nil {
+		if response.Usage.OutputTokens > 0 {
+			outputTokens = int(response.Usage.OutputTokens)
+		}
+		// Use actual input tokens if available
+		if response.Usage.InputTokens > 0 {
+			inputTokens = int(response.Usage.InputTokens)
+		}
+	}
+	
+	// Record metrics and structured logs
+	success := err == nil
+	if c.metrics != nil {
+		c.metrics.RecordLLMCall(ctx, c.model, inputTokens, outputTokens, duration, success)
+	}
+	if c.structuredLogger != nil {
+		c.structuredLogger.LogLLMCall(ctx, c.model, inputTokens, outputTokens, duration, err)
+	}
+	
 	if err != nil {
 		return nil, fmt.Errorf("claude API call: %w", err)
 	}
-	return msg, nil
+	return response, nil
 }
 
 // SendMessageWithTools sends a message with tool definitions and returns the response.
 func (c *Client) SendMessageWithTools(ctx context.Context, system string, messages []anthropic.MessageParam, tools []anthropic.ToolUnionParam) (*anthropic.Message, error) {
+	start := time.Now()
+	
 	params := anthropic.MessageNewParams{
 		Model:     anthropic.Model(c.model),
 		MaxTokens: int64(c.maxTokens),
@@ -59,11 +98,46 @@ func (c *Client) SendMessageWithTools(ctx context.Context, system string, messag
 		}
 	}
 
-	msg, err := c.sdk.Messages.New(ctx, params)
+	response, err := c.sdk.Messages.New(ctx, params)
+	duration := time.Since(start)
+	
+	// Calculate token counts
+	inputTokens := c.estimateTokens(system, messages)
+	outputTokens := 0
+	if response != nil {
+		if response.Usage.OutputTokens > 0 {
+			outputTokens = int(response.Usage.OutputTokens)
+		}
+		if response.Usage.InputTokens > 0 {
+			inputTokens = int(response.Usage.InputTokens)
+		}
+	}
+	
+	// Record metrics and structured logs
+	success := err == nil
+	if c.metrics != nil {
+		c.metrics.RecordLLMCall(ctx, c.model, inputTokens, outputTokens, duration, success)
+	}
+	if c.structuredLogger != nil {
+		c.structuredLogger.LogLLMCall(ctx, c.model, inputTokens, outputTokens, duration, err)
+	}
+	
 	if err != nil {
 		return nil, fmt.Errorf("claude API call with tools: %w", err)
 	}
-	return msg, nil
+	return response, nil
+}
+
+// estimateTokens provides a rough estimate of input token count
+func (c *Client) estimateTokens(system string, messages []anthropic.MessageParam) int {
+	// Simple estimation: ~4 characters per token
+	count := len(system) / 4
+	for range messages {
+		// For simplicity, just estimate based on JSON serialization
+		// In practice, you'd want more sophisticated token counting
+		count += 50 // rough estimate per message
+	}
+	return count
 }
 
 // ExtractText extracts the text content from a Claude message response.
