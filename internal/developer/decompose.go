@@ -83,24 +83,6 @@ func (d *DeveloperAgent) createChildIssues(ctx context.Context, parentNum int, s
 	return nums, nil
 }
 
-// formatSubtaskBreakdown builds a markdown list of subtasks with their linked issue numbers and descriptions.
-func formatSubtaskBreakdown(subtasks []subtask, childNums []int) string {
-	var sb strings.Builder
-	for i, st := range subtasks {
-		issueRef := ""
-		if i < len(childNums) {
-			issueRef = fmt.Sprintf(" #%d", childNums[i])
-		}
-		// Truncate body to first 200 chars for readability.
-		body := st.Body
-		if len(body) > 200 {
-			body = body[:200] + "..."
-		}
-		fmt.Fprintf(&sb, "%d.%s **%s**\n   %s\n", i+1, issueRef, st.Title, body)
-	}
-	return sb.String()
-}
-
 // formatIssueLinks formats issue numbers as "#1, #2, #3".
 func formatIssueLinks(nums []int) string {
 	parts := make([]string, len(nums))
@@ -158,10 +140,10 @@ func (d *DeveloperAgent) decompose(ctx context.Context, issueNum int, issueConte
 	_ = d.Deps.GitHub.AddLabels(ctx, issueNum, []string{"agent:epic"})
 	_ = d.Deps.GitHub.RemoveLabel(ctx, issueNum, "agent:ready")
 
-	// Post detailed summary comment.
+	// Post summary comment.
 	comment := fmt.Sprintf(
-		"🤖 **Issue decomposed** — analysis determined this issue exceeds the iteration budget.\n\nDecomposed into %d subtasks:\n\n%s\n\nEach subtask will be processed independently.",
-		len(childNums), formatSubtaskBreakdown(subtasks, childNums),
+		"🤖 This issue has been decomposed into %d subtasks: %s\n\nEach subtask will be processed independently.",
+		len(childNums), formatIssueLinks(childNums),
 	)
 	_ = d.Deps.GitHub.CreateComment(ctx, issueNum, comment)
 
@@ -207,10 +189,10 @@ func (d *DeveloperAgent) reactiveDecompose(ctx context.Context, issueNum int, is
 	_ = d.Deps.GitHub.AddLabels(ctx, issueNum, []string{"agent:epic", "agent:failed"})
 	_ = d.Deps.GitHub.RemoveLabel(ctx, issueNum, "agent:ready")
 
-	// Post detailed summary comment.
+	// Post summary comment.
 	comment := fmt.Sprintf(
-		"🤖 **Reactive decomposition** — implementation exceeded the iteration limit before completing all work.\n\nRemaining work decomposed into %d subtasks:\n\n%s",
-		len(childNums), formatSubtaskBreakdown(subtasks, childNums),
+		"🤖 Implementation exceeded iteration limit. Remaining work decomposed into %d subtasks: %s",
+		len(childNums), formatIssueLinks(childNums),
 	)
 	_ = d.Deps.GitHub.CreateComment(ctx, issueNum, comment)
 
@@ -220,11 +202,7 @@ func (d *DeveloperAgent) reactiveDecompose(ctx context.Context, issueNum int, is
 // processChildIssues fetches and processes each child issue sequentially.
 func (d *DeveloperAgent) processChildIssues(ctx context.Context, childNums []int, parentNum int) error {
 	var failures []int
-	for i, num := range childNums {
-		// Post progress comment on the parent issue.
-		_ = d.Deps.GitHub.CreateComment(ctx, parentNum,
-			fmt.Sprintf("🤖 Starting subtask %d/%d: #%d", i+1, len(childNums), num))
-
+	for _, num := range childNums {
 		issue, err := d.Deps.GitHub.GetIssue(ctx, num)
 		if err != nil {
 			d.logger().Error("failed to fetch child issue", "issue", num, "error", err)

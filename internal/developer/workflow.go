@@ -68,10 +68,6 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 		return err
 	}
 
-	// Post analysis plan on the issue so humans can see what the agent decided.
-	_ = d.Deps.GitHub.CreateComment(ctx, issueNum,
-		fmt.Sprintf("🤖 **Analysis complete**\n\n%s", plan))
-
 	// Step 2.5: Proactive decomposition
 	if tooComplex && d.Deps.Config.Decomposition.Enabled {
 		d.logger().Info("issue too complex, decomposing", "issue", issueNum)

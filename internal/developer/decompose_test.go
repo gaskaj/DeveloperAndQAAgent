@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -278,39 +277,6 @@ func newTestAgent(t *testing.T, gh ghub.Client, decompEnabled bool) *DeveloperAg
 	return da
 }
 
-// --- Unit tests: formatSubtaskBreakdown ---
-
-func TestFormatSubtaskBreakdown(t *testing.T) {
-	subtasks := []subtask{
-		{Title: "Add model", Body: "Create the model struct."},
-		{Title: "Add handler", Body: "Create the HTTP handler."},
-	}
-	childNums := []int{101, 102}
-
-	result := formatSubtaskBreakdown(subtasks, childNums)
-
-	assert.Contains(t, result, "#101")
-	assert.Contains(t, result, "**Add model**")
-	assert.Contains(t, result, "Create the model struct.")
-	assert.Contains(t, result, "#102")
-	assert.Contains(t, result, "**Add handler**")
-	assert.Contains(t, result, "Create the HTTP handler.")
-}
-
-func TestFormatSubtaskBreakdown_TruncatesLongBody(t *testing.T) {
-	longBody := strings.Repeat("x", 300)
-	subtasks := []subtask{
-		{Title: "Long task", Body: longBody},
-	}
-	childNums := []int{101}
-
-	result := formatSubtaskBreakdown(subtasks, childNums)
-
-	// Body should be truncated to 200 chars + "..."
-	assert.Contains(t, result, "...")
-	assert.Less(t, len(result), 300)
-}
-
 // --- Integration tests ---
 
 func TestCreateChildIssues(t *testing.T) {
@@ -377,63 +343,4 @@ func TestProcessChildIssues_SkipsWithoutReadyLabel(t *testing.T) {
 
 	// Summary should still be posted.
 	require.NotEmpty(t, mock.comments[10])
-}
-
-func TestProcessChildIssues_PostsProgressComments(t *testing.T) {
-	mock := newTrackingMock()
-
-	mock.issues[101] = &github.Issue{
-		Number: github.Ptr(101),
-		Title:  github.Ptr("Child 1"),
-		Labels: []*github.Label{{Name: github.Ptr("bug")}}, // no agent:ready, will be skipped
-	}
-	mock.issues[102] = &github.Issue{
-		Number: github.Ptr(102),
-		Title:  github.Ptr("Child 2"),
-		Labels: []*github.Label{{Name: github.Ptr("bug")}},
-	}
-
-	da := newTestAgent(t, mock, true)
-
-	err := da.processChildIssues(context.Background(), []int{101, 102}, 10)
-	assert.NoError(t, err)
-
-	// Should have progress comments for each child + the final summary.
-	parentComments := mock.comments[10]
-	require.GreaterOrEqual(t, len(parentComments), 3) // 2 progress + 1 summary
-
-	assert.Contains(t, parentComments[0], "Starting subtask 1/2: #101")
-	assert.Contains(t, parentComments[1], "Starting subtask 2/2: #102")
-}
-
-func TestDecompose_PostsDetailedComment(t *testing.T) {
-	mock := newTrackingMock()
-	da := newTestAgent(t, mock, true)
-
-	// Provide a plan that contains subtask markers so decompose() can parse them
-	// without needing a real Claude call.
-	plan := `## Analysis
-
-### Subtask 1: Setup database
-Create the database schema and migrations.
-
-### Subtask 2: Build API
-Implement the REST endpoints.`
-
-	childNums, err := da.decompose(context.Background(), 42, "issue context", plan)
-	require.NoError(t, err)
-	require.Len(t, childNums, 2)
-
-	// Verify the decomposition summary comment on issue 42.
-	comments := mock.comments[42]
-	require.NotEmpty(t, comments)
-
-	// Find the decomposition comment (last one posted on issue 42).
-	decompComment := comments[len(comments)-1]
-	assert.Contains(t, decompComment, "Issue decomposed")
-	assert.Contains(t, decompComment, "exceeds the iteration budget")
-	assert.Contains(t, decompComment, "**Setup database**")
-	assert.Contains(t, decompComment, "**Build API**")
-	assert.Contains(t, decompComment, fmt.Sprintf("#%d", childNums[0]))
-	assert.Contains(t, decompComment, fmt.Sprintf("#%d", childNums[1]))
 }
