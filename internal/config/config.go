@@ -64,6 +64,78 @@ type LoggingConfig struct {
 	EnableCorrelation  bool                      `mapstructure:"enable_correlation"`
 	Sampling           LoggingSamplingConfig     `mapstructure:"sampling"`
 	Components         map[string]string         `mapstructure:"components"`
+	StructuredLogging  StructuredLoggingConfig   `mapstructure:"structured_logging"`
+	MultiAgentObserve  MultiAgentObservability   `mapstructure:"multi_agent_observability"`
+}
+
+// StructuredLoggingConfig holds structured logging configuration
+type StructuredLoggingConfig struct {
+	Enabled                bool                        `mapstructure:"enabled"`
+	Format                 string                      `mapstructure:"format"`
+	IncludeCaller          bool                        `mapstructure:"include_caller"`
+	IncludeStackTrace      bool                        `mapstructure:"include_stack_trace"`
+	Correlation            CorrelationConfig           `mapstructure:"correlation"`
+	WorkflowTracking       WorkflowTrackingConfig      `mapstructure:"workflow_tracking"`
+	Performance            PerformanceLoggingConfig    `mapstructure:"performance"`
+	Filtering              LogFilteringConfig          `mapstructure:"filtering"`
+	Export                 LogExportConfig             `mapstructure:"export"`
+}
+
+// CorrelationConfig holds correlation context configuration
+type CorrelationConfig struct {
+	Enabled                 bool `mapstructure:"enabled"`
+	AutoGenerate            bool `mapstructure:"auto_generate"`
+	IncludeWorkflowStage    bool `mapstructure:"include_workflow_stage"`
+	IncludeAgentMetadata    bool `mapstructure:"include_agent_metadata"`
+	PropagateGitHubContext  bool `mapstructure:"propagate_github_context"`
+}
+
+// WorkflowTrackingConfig holds workflow tracking configuration
+type WorkflowTrackingConfig struct {
+	Enabled           bool `mapstructure:"enabled"`
+	TrackHandoffs     bool `mapstructure:"track_handoffs"`
+	TrackDecisions    bool `mapstructure:"track_decisions"`
+	IncludePerformance bool `mapstructure:"include_performance"`
+	TrackToolUsage    bool `mapstructure:"track_tool_usage"`
+}
+
+// PerformanceLoggingConfig holds performance logging configuration
+type PerformanceLoggingConfig struct {
+	TrackDurations    bool `mapstructure:"track_durations"`
+	MemorySnapshots   bool `mapstructure:"memory_snapshots"`
+	LLMMetrics        bool `mapstructure:"llm_metrics"`
+	WorkflowTiming    bool `mapstructure:"workflow_timing"`
+}
+
+// LogFilteringConfig holds log filtering configuration
+type LogFilteringConfig struct {
+	DebugSamplingRate float64  `mapstructure:"debug_sampling_rate"`
+	IncludeErrors     bool     `mapstructure:"include_errors"`
+	IncludeWarnings   bool     `mapstructure:"include_warnings"`
+	IncludeEvents     []string `mapstructure:"include_events"`
+}
+
+// LogExportConfig holds log export configuration
+type LogExportConfig struct {
+	Enabled       bool                               `mapstructure:"enabled"`
+	FieldMappings map[string]map[string]string       `mapstructure:"field_mappings"`
+}
+
+// MultiAgentObservability holds multi-agent observability configuration
+type MultiAgentObservability struct {
+	CrossAgentTracking      bool                      `mapstructure:"cross_agent_tracking"`
+	CommunicationPatterns   bool                      `mapstructure:"communication_patterns"`
+	PerformanceComparison   bool                      `mapstructure:"performance_comparison"`
+	WorkflowEfficiency      bool                      `mapstructure:"workflow_efficiency"`
+	Alerting                MultiAgentAlertingConfig  `mapstructure:"alerting"`
+}
+
+// MultiAgentAlertingConfig holds alerting configuration for multi-agent issues
+type MultiAgentAlertingConfig struct {
+	LostCorrelationThreshold     float64 `mapstructure:"lost_correlation_threshold"`
+	HandoffTimeoutSeconds        int     `mapstructure:"handoff_timeout_seconds"`
+	StageStallThresholdSeconds   int     `mapstructure:"stage_stall_threshold_seconds"`
+	ToolFailureRateThreshold     float64 `mapstructure:"tool_failure_rate_threshold"`
 }
 
 // LoggingSamplingConfig holds log sampling configuration.

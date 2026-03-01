@@ -34,8 +34,13 @@ func (o *Orchestrator) WithObservability(structuredLogger *observability.Structu
 
 // Run starts all agents concurrently and blocks until they all stop or the context is cancelled.
 func (o *Orchestrator) Run(ctx context.Context) error {
-	// Ensure correlation ID for orchestrator operations
-	ctx = observability.EnsureCorrelationID(ctx)
+	// Create enriched correlation context for orchestrator operations
+	ctx = observability.EnsureCorrelationContext(ctx, "orchestrator", 0)
+	
+	// Log orchestrator start
+	if o.structuredLogger != nil {
+		o.structuredLogger.LogAgentStart(ctx, "orchestrator", "multi-agent system starting")
+	}
 	
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -45,16 +50,21 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		
 		o.logger.Info("starting agent", "type", agentType)
 		
-		// Log workflow transition to starting state
+		// Log workflow transition to starting state and agent handoff
 		if o.structuredLogger != nil {
-			o.structuredLogger.LogWorkflowTransition(ctx, 0, "stopped", "starting", "orchestrator_start")
+			o.structuredLogger.LogWorkflowTransition(ctx, 0, "stopped", "starting", "orchestrator_start_agent")
+			o.structuredLogger.LogAgentHandoff(ctx, "orchestrator", agentType, "system_startup", 0)
 		}
 		if o.metrics != nil {
 			o.metrics.RecordWorkflowTransition(ctx, "stopped", "starting")
 		}
 
 		g.Go(func() error {
-			if err := a.Run(ctx); err != nil {
+			// Create agent-specific correlation context
+			agentCtx := observability.WithHandoff(ctx, "orchestrator", agentType, "startup", 0)
+			agentCtx = observability.WithWorkflowStage(agentCtx, observability.WorkflowStageStart)
+			
+			if err := a.Run(agentCtx); err != nil {
 				o.logger.Error("agent stopped with error",
 					"type", agentType,
 					"error", err,
@@ -62,28 +72,39 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				
 				// Log workflow transition to error state
 				if o.structuredLogger != nil {
-					o.structuredLogger.LogWorkflowTransition(ctx, 0, "running", "error", err.Error())
+					o.structuredLogger.LogWorkflowTransition(agentCtx, 0, "running", "error", err.Error())
+					o.structuredLogger.LogDecisionPoint(agentCtx, agentType, "agent_failed", err.Error(), map[string]interface{}{
+						"error_type": "agent_runtime_error",
+					})
 				}
 				if o.metrics != nil {
-					o.metrics.RecordWorkflowTransition(ctx, "running", "error")
+					o.metrics.RecordWorkflowTransition(agentCtx, "running", "error")
 				}
 				
 				return err
 			}
 			
-			// Log successful shutdown
+			// Log successful shutdown with handoff back to orchestrator
 			if o.structuredLogger != nil {
-				o.structuredLogger.LogWorkflowTransition(ctx, 0, "running", "stopped", "graceful_shutdown")
+				o.structuredLogger.LogWorkflowTransition(agentCtx, 0, "running", "stopped", "graceful_shutdown")
+				o.structuredLogger.LogAgentHandoff(agentCtx, agentType, "orchestrator", "shutdown", 0)
 			}
 			if o.metrics != nil {
-				o.metrics.RecordWorkflowTransition(ctx, "running", "stopped")
+				o.metrics.RecordWorkflowTransition(agentCtx, "running", "stopped")
 			}
 			
 			return nil
 		})
 	}
 
-	return g.Wait()
+	err := g.Wait()
+	
+	// Log orchestrator stop
+	if o.structuredLogger != nil {
+		o.structuredLogger.LogAgentStop(ctx, "orchestrator", 0, err)
+	}
+	
+	return err
 }
 
 // Status returns status reports from all managed agents.

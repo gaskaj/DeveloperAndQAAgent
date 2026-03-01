@@ -14,6 +14,7 @@ import (
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/claude"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/gitops"
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
 	"github.com/google/go-github/v68/github"
 )
@@ -37,10 +38,24 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 	issueTitle := issue.GetTitle()
 	issueBody := issue.GetBody()
 
+	// Create enriched correlation context for this issue
+	ctx = observability.EnsureCorrelationContext(ctx, string(d.Type()), issueNum)
+	
+	// Add issue metadata to correlation context
+	ctx = observability.WithMetadata(ctx, "issue_title", issueTitle)
+	ctx = observability.WithMetadata(ctx, "issue_number", fmt.Sprintf("%d", issueNum))
+
 	d.logger().Info("processing issue", "number", issueNum, "title", issueTitle)
 
 	// Step 1: Claim — also removes agent:ready to prevent re-processing on restart.
+	ctx = observability.WithWorkflowStage(ctx, observability.WorkflowStageClaim)
 	d.updateStatus(state.StateClaim, issueNum, "claiming issue")
+	
+	// Log workflow transition
+	if d.Deps.StructuredLogger != nil {
+		d.Deps.StructuredLogger.LogWorkflowTransition(ctx, issueNum, "idle", "claim", "new_issue_detected")
+	}
+	
 	if err := d.claimIssue(ctx, issueNum); err != nil {
 		return fmt.Errorf("claiming issue: %w", err)
 	}
@@ -59,7 +74,14 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 	}
 
 	// Step 2: Setup workspace — moved before analyze so Claude has real codebase context.
+	ctx = observability.WithWorkflowStage(ctx, observability.WorkflowStage("workspace"))
 	d.updateStatus(state.StateWorkspace, issueNum, "setting up workspace")
+	
+	// Log workflow transition
+	if d.Deps.StructuredLogger != nil {
+		d.Deps.StructuredLogger.LogWorkflowTransition(ctx, issueNum, "claim", "workspace", "setup_development_environment")
+	}
+	
 	branchName := fmt.Sprintf("agent/issue-%d", issueNum)
 	ws.BranchName = branchName
 	ws.State = state.StateWorkspace
@@ -86,16 +108,44 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 	repoContext := gatherRepoContext(repo)
 
 	// Step 3: Analyze — now receives real codebase structure.
+	ctx = observability.WithWorkflowStage(ctx, observability.WorkflowStageAnalyze)
 	d.updateStatus(state.StateAnalyze, issueNum, "analyzing requirements")
+	
+	// Log workflow transition
+	if d.Deps.StructuredLogger != nil {
+		d.Deps.StructuredLogger.LogWorkflowTransition(ctx, issueNum, "workspace", "analyze", "begin_requirement_analysis")
+	}
+	
 	var labels []string
 	for _, l := range issue.Labels {
 		labels = append(labels, l.GetName())
 	}
 	issueContext := claude.FormatIssueContext(issueNum, issueTitle, issueBody, labels)
+	
+	// Log LLM call for analysis
+	startTime := time.Now()
 	plan, tooComplex, err := d.analyze(ctx, issueContext, repoContext)
+	analysisTime := time.Since(startTime)
+	
 	if err != nil {
+		// Log analysis failure
+		if d.Deps.StructuredLogger != nil {
+			d.Deps.StructuredLogger.LogDecisionPoint(ctx, string(d.Type()), "analyze_failed", err.Error(), map[string]interface{}{
+				"analysis_time_ms": analysisTime.Milliseconds(),
+				"issue_complexity": "unknown",
+			})
+		}
 		d.failIssue(ctx, ws, fmt.Errorf("analysis failed: %w", err))
 		return err
+	}
+	
+	// Log successful analysis with decision point
+	if d.Deps.StructuredLogger != nil {
+		d.Deps.StructuredLogger.LogDecisionPoint(ctx, string(d.Type()), "analyze_complete", "issue analysis successful", map[string]interface{}{
+			"analysis_time_ms": analysisTime.Milliseconds(),
+			"too_complex":      tooComplex,
+			"plan_length":      len(plan),
+		})
 	}
 
 	// Post analysis plan as a comment on the issue.
@@ -110,6 +160,17 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 
 	// Step 3.5: Proactive decomposition
 	if tooComplex && d.Deps.Config.Decomposition.Enabled {
+		ctx = observability.WithWorkflowStage(ctx, observability.WorkflowStageDecompose)
+		
+		// Log decision point and workflow transition
+		if d.Deps.StructuredLogger != nil {
+			d.Deps.StructuredLogger.LogDecisionPoint(ctx, string(d.Type()), "proactive_decomposition", "issue exceeds complexity threshold", map[string]interface{}{
+				"decomposition_enabled": true,
+				"complexity_reason":     "too_complex_for_single_agent",
+			})
+			d.Deps.StructuredLogger.LogWorkflowTransition(ctx, issueNum, "analyze", "decompose", "proactive_decomposition_triggered")
+		}
+		
 		d.logger().Info("issue too complex, decomposing", "issue", issueNum)
 		childNums, err := d.decompose(ctx, issueNum, issueContext, plan)
 		if err != nil {
@@ -121,21 +182,46 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 		ws.UpdatedAt = time.Now()
 		_ = d.Deps.Store.Save(ctx, ws)
 
+		// Log handoff to child issues
+		if d.Deps.StructuredLogger != nil {
+			d.Deps.StructuredLogger.LogAgentHandoff(ctx, string(d.Type()), "child_agents", "decomposition_complete", len(childNums)*1024) // Estimate payload
+		}
+
 		_ = d.processChildIssues(ctx, childNums, issueNum)
 		d.updateStatus(state.StateIdle, 0, "waiting for issues")
 		return nil
 	}
 
 	// Step 4: Implement
+	ctx = observability.WithWorkflowStage(ctx, observability.WorkflowStageImplement)
 	d.updateStatus(state.StateImplement, issueNum, "implementing changes")
+	
+	// Log workflow transition
+	if d.Deps.StructuredLogger != nil {
+		d.Deps.StructuredLogger.LogWorkflowTransition(ctx, issueNum, "analyze", "implement", "begin_implementation")
+	}
+	
 	_ = d.Deps.GitHub.AddLabels(ctx, issueNum, []string{"agent:in-progress"})
 	ws.State = state.StateImplement
 	ws.UpdatedAt = time.Now()
 	_ = d.Deps.Store.Save(ctx, ws)
 
+	implementStartTime := time.Now()
 	if err := d.implement(ctx, repo, issueContext, plan, repoContext); err != nil {
+		implementDuration := time.Since(implementStartTime)
+		
 		// Reactive decomposition: if iteration limit hit and decomposition enabled.
 		if claude.IsMaxIterationsError(err) && d.Deps.Config.Decomposition.Enabled {
+			// Log decision point for reactive decomposition
+			if d.Deps.StructuredLogger != nil {
+				d.Deps.StructuredLogger.LogDecisionPoint(ctx, string(d.Type()), "reactive_decomposition", "iteration limit exceeded", map[string]interface{}{
+					"implementation_duration_ms": implementDuration.Milliseconds(),
+					"error_type":                 "max_iterations_exceeded",
+					"decomposition_trigger":      "reactive",
+				})
+				d.Deps.StructuredLogger.LogWorkflowTransition(ctx, issueNum, "implement", "decompose", "iteration_limit_exceeded")
+			}
+			
 			d.logger().Info("iteration limit hit, reactively decomposing", "issue", issueNum)
 			childNums, decompErr := d.reactiveDecompose(ctx, issueNum, issueContext, plan)
 			if decompErr != nil {
@@ -147,10 +233,24 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 			ws.UpdatedAt = time.Now()
 			_ = d.Deps.Store.Save(ctx, ws)
 
+			// Log handoff to child agents
+			if d.Deps.StructuredLogger != nil {
+				d.Deps.StructuredLogger.LogAgentHandoff(ctx, string(d.Type()), "child_agents", "reactive_decomposition", len(childNums)*1024)
+			}
+
 			_ = d.processChildIssues(ctx, childNums, issueNum)
 			d.updateStatus(state.StateIdle, 0, "waiting for issues")
 			return nil
 		}
+		
+		// Log implementation failure
+		if d.Deps.StructuredLogger != nil {
+			d.Deps.StructuredLogger.LogDecisionPoint(ctx, string(d.Type()), "implementation_failed", err.Error(), map[string]interface{}{
+				"implementation_duration_ms": implementDuration.Milliseconds(),
+				"error_type":                 "implementation_error",
+			})
+		}
+		
 		d.failIssue(ctx, ws, fmt.Errorf("implementation failed: %w", err))
 		return err
 	}

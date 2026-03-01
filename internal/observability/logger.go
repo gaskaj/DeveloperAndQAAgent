@@ -41,6 +41,7 @@ func NewStructuredLogger(cfg config.LoggingConfig) *StructuredLogger {
 
 	opts := &slog.HandlerOptions{
 		Level: level,
+		AddSource: cfg.StructuredLogging.IncludeCaller,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
 			// Add timestamp formatting and other structured enhancements
 			if a.Key == slog.TimeKey {
@@ -49,12 +50,35 @@ func NewStructuredLogger(cfg config.LoggingConfig) *StructuredLogger {
 					Value: slog.StringValue(a.Value.Time().Format(time.RFC3339Nano)),
 				}
 			}
+			// Map log level to structured format if configured
+			if a.Key == slog.LevelKey && cfg.StructuredLogging.Export.Enabled {
+				if fieldMappings, ok := cfg.StructuredLogging.Export.FieldMappings["generic"]; ok {
+					if levelField, ok := fieldMappings["level"]; ok {
+						return slog.Attr{
+							Key:   levelField,
+							Value: a.Value,
+						}
+					}
+				}
+			}
 			return a
 		},
 	}
 
-	// Use JSON handler for structured output
-	handler := slog.NewJSONHandler(os.Stderr, opts)
+	var handler slog.Handler
+	
+	// Choose handler based on format configuration
+	switch cfg.StructuredLogging.Format {
+	case "structured_text":
+		handler = slog.NewTextHandler(os.Stderr, opts)
+	case "development":
+		// Use text handler with pretty printing for development
+		handler = slog.NewTextHandler(os.Stderr, opts)
+	default:
+		// Default to JSON for structured logging
+		handler = slog.NewJSONHandler(os.Stderr, opts)
+	}
+	
 	logger := slog.New(handler)
 
 	return &StructuredLogger{
@@ -73,48 +97,147 @@ func (sl *StructuredLogger) WithCorrelation(ctx context.Context) *slog.Logger {
 
 // LogAgentStart logs the start of an agent with timing and context
 func (sl *StructuredLogger) LogAgentStart(ctx context.Context, agentType, message string) {
-	sl.WithCorrelation(ctx).Info("agent_start",
-		"agent_type", agentType,
-		"message", message,
-		"timestamp", time.Now(),
-	)
+	attrs := []slog.Attr{
+		slog.String("event_type", "agent_start"),
+		slog.String("agent_type", agentType),
+		slog.String("message", message),
+		slog.Time("timestamp", time.Now()),
+	}
+	
+	// Add enriched correlation context if available
+	if corrCtx := GetCorrelationContext(ctx); corrCtx != nil {
+		attrs = append(attrs,
+			slog.Int("issue_id", corrCtx.IssueID),
+			slog.String("workflow_stage", string(corrCtx.WorkflowStage)),
+			slog.String("task_id", corrCtx.TaskID),
+			slog.Int("handoff_count", corrCtx.GetHandoffCount()),
+		)
+		
+		// Add metadata as structured attributes
+		for k, v := range corrCtx.Metadata {
+			attrs = append(attrs, slog.String("meta_"+k, v))
+		}
+	}
+	
+	sl.WithCorrelation(ctx).LogAttrs(context.Background(), slog.LevelInfo, "agent_lifecycle", attrs...)
 }
 
 // LogAgentStop logs the stop of an agent with timing and context
 func (sl *StructuredLogger) LogAgentStop(ctx context.Context, agentType string, duration time.Duration, err error) {
-	logger := sl.WithCorrelation(ctx).With(
-		"agent_type", agentType,
-		"duration_ms", duration.Milliseconds(),
-		"timestamp", time.Now(),
-	)
-
-	if err != nil {
-		logger.Error("agent_stop", "error", err.Error())
-	} else {
-		logger.Info("agent_stop", "status", "success")
+	attrs := []slog.Attr{
+		slog.String("event_type", "agent_stop"),
+		slog.String("agent_type", agentType),
+		slog.Int64("duration_ms", duration.Milliseconds()),
+		slog.Time("timestamp", time.Now()),
 	}
+	
+	// Add enriched correlation context if available
+	if corrCtx := GetCorrelationContext(ctx); corrCtx != nil {
+		attrs = append(attrs,
+			slog.Int("issue_id", corrCtx.IssueID),
+			slog.String("workflow_stage", string(corrCtx.WorkflowStage)),
+			slog.String("task_id", corrCtx.TaskID),
+			slog.Int("handoff_count", corrCtx.GetHandoffCount()),
+			slog.Int64("total_workflow_duration_ms", corrCtx.GetWorkflowDuration().Milliseconds()),
+		)
+		
+		// Add stage timing breakdown
+		for _, entry := range corrCtx.StageEntries {
+			if entry.Duration > 0 {
+				attrs = append(attrs, slog.Int64("stage_"+string(entry.Stage)+"_duration_ms", entry.Duration.Milliseconds()))
+			}
+		}
+	}
+
+	level := slog.LevelInfo
+	if err != nil {
+		attrs = append(attrs, slog.String("error", err.Error()))
+		level = slog.LevelError
+	} else {
+		attrs = append(attrs, slog.String("status", "success"))
+	}
+	
+	sl.WithCorrelation(ctx).LogAttrs(context.Background(), level, "agent_lifecycle", attrs...)
 }
 
 // LogAgentHandoff logs agent handoffs with context and payload information
 func (sl *StructuredLogger) LogAgentHandoff(ctx context.Context, fromAgent, toAgent, trigger string, payloadSize int) {
-	sl.WithCorrelation(ctx).Info("agent_handoff",
-		"from_agent", fromAgent,
-		"to_agent", toAgent,
-		"trigger", trigger,
-		"payload_size_bytes", payloadSize,
-		"timestamp", time.Now(),
-	)
+	attrs := []slog.Attr{
+		slog.String("event_type", "agent_handoff"),
+		slog.String("from_agent", fromAgent),
+		slog.String("to_agent", toAgent),
+		slog.String("trigger", trigger),
+		slog.Int("payload_size_bytes", payloadSize),
+		slog.Time("timestamp", time.Now()),
+	}
+	
+	// Add enriched correlation context if available
+	if corrCtx := GetCorrelationContext(ctx); corrCtx != nil {
+		attrs = append(attrs,
+			slog.Int("issue_id", corrCtx.IssueID),
+			slog.String("current_workflow_stage", string(corrCtx.WorkflowStage)),
+			slog.String("task_id", corrCtx.TaskID),
+			slog.Int("handoff_sequence", corrCtx.GetHandoffCount()),
+			slog.Int64("workflow_duration_ms", corrCtx.GetWorkflowDuration().Milliseconds()),
+		)
+		
+		// Add handoff chain context for traceability
+		if len(corrCtx.HandoffChain) > 0 {
+			handoffChain := make([]string, len(corrCtx.HandoffChain))
+			for i, h := range corrCtx.HandoffChain {
+				handoffChain[i] = h.FromAgent + "->" + h.ToAgent
+			}
+			attrs = append(attrs, slog.Any("previous_handoffs", handoffChain))
+		}
+	}
+	
+	sl.WithCorrelation(ctx).LogAttrs(context.Background(), slog.LevelInfo, "agent_handoff", attrs...)
 }
 
 // LogWorkflowTransition logs workflow state changes
 func (sl *StructuredLogger) LogWorkflowTransition(ctx context.Context, issueID int, fromState, toState, reason string) {
-	sl.WithCorrelation(ctx).Info("workflow_transition",
-		"issue_id", issueID,
-		"from_state", fromState,
-		"to_state", toState,
-		"reason", reason,
-		"timestamp", time.Now(),
-	)
+	attrs := []slog.Attr{
+		slog.String("event_type", "workflow_transition"),
+		slog.Int("issue_id", issueID),
+		slog.String("from_state", fromState),
+		slog.String("to_state", toState),
+		slog.String("reason", reason),
+		slog.Time("timestamp", time.Now()),
+	}
+	
+	// Add enriched correlation context if available
+	if corrCtx := GetCorrelationContext(ctx); corrCtx != nil {
+		attrs = append(attrs,
+			slog.String("agent_type", corrCtx.AgentType),
+			slog.String("task_id", corrCtx.TaskID),
+			slog.Int("handoff_count", corrCtx.GetHandoffCount()),
+			slog.Int64("workflow_duration_ms", corrCtx.GetWorkflowDuration().Milliseconds()),
+		)
+		
+		// Add stage timing if transitioning stages
+		if fromStage := WorkflowStage(fromState); fromStage != "" {
+			stageDuration := corrCtx.GetStageDuration(fromStage)
+			if stageDuration > 0 {
+				attrs = append(attrs, slog.Int64("stage_duration_ms", stageDuration.Milliseconds()))
+			}
+		}
+		
+		// Add workflow stage performance summary
+		totalStages := len(corrCtx.StageEntries)
+		completedStages := 0
+		for _, entry := range corrCtx.StageEntries {
+			if entry.Duration > 0 {
+				completedStages++
+			}
+		}
+		
+		attrs = append(attrs, 
+			slog.Int("total_stages", totalStages),
+			slog.Int("completed_stages", completedStages),
+		)
+	}
+	
+	sl.WithCorrelation(ctx).LogAttrs(context.Background(), slog.LevelInfo, "workflow_transition", attrs...)
 }
 
 // LogToolUsage logs tool usage with success/failure tracking

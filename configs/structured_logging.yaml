@@ -1,0 +1,161 @@
+# Structured Logging Configuration for Multi-Agent Traceability
+# This configuration extends the base logging.yaml with structured logging enhancements
+
+# Structured logging configuration
+structured_logging:
+  # Enable structured logging with JSON output
+  enabled: true
+  
+  # Output format: json, structured_text, development
+  format: json
+  
+  # Include source caller information in logs
+  include_caller: false
+  
+  # Include stack trace on errors
+  include_stack_trace: true
+  
+  # Correlation context configuration
+  correlation:
+    # Enable correlation ID tracking across agent handoffs
+    enabled: true
+    
+    # Auto-generate correlation IDs for new workflows
+    auto_generate: true
+    
+    # Include workflow stage in correlation context
+    include_workflow_stage: true
+    
+    # Include agent metadata (type, instance ID)
+    include_agent_metadata: true
+    
+    # Propagate correlation context through GitHub API calls
+    propagate_github_context: true
+  
+  # Multi-agent workflow tracking
+  workflow_tracking:
+    # Enable workflow transition logging
+    enabled: true
+    
+    # Track agent handoff metrics
+    track_handoffs: true
+    
+    # Track decision points with reasoning
+    track_decisions: true
+    
+    # Include performance metrics in workflow logs
+    include_performance: true
+    
+    # Track tool usage across agents
+    track_tool_usage: true
+  
+  # Performance monitoring in structured logs
+  performance:
+    # Track operation durations
+    track_durations: true
+    
+    # Include memory usage snapshots
+    memory_snapshots: true
+    
+    # Track LLM API call metrics
+    llm_metrics: true
+    
+    # Include workflow timing breakdown
+    workflow_timing: true
+  
+  # Log aggregation and filtering
+  filtering:
+    # Sample high-volume debug logs
+    debug_sampling_rate: 0.1
+    
+    # Always include error and warning logs
+    include_errors: true
+    include_warnings: true
+    
+    # Include specific event types
+    include_events:
+      - agent_start
+      - agent_stop  
+      - agent_handoff
+      - workflow_transition
+      - decision_point
+      - tool_usage
+      - llm_call
+      - performance_metric
+  
+  # Export configuration for log aggregation systems
+  export:
+    # Enable structured log export
+    enabled: true
+    
+    # Include field mappings for common log aggregation systems
+    field_mappings:
+      # ELK Stack field mappings
+      elk:
+        timestamp: "@timestamp"
+        level: "log.level"
+        message: "message"
+        correlation_id: "trace.id"
+        agent_type: "agent.type"
+        workflow_stage: "workflow.stage"
+        duration: "event.duration"
+        
+      # Datadog field mappings  
+      datadog:
+        timestamp: "timestamp"
+        level: "status"
+        message: "message"
+        correlation_id: "dd.trace_id"
+        agent_type: "service.name"
+        workflow_stage: "resource"
+        
+      # Generic JSON field mappings
+      generic:
+        timestamp: "timestamp"
+        level: "level"
+        message: "msg"
+        correlation_id: "correlation_id"
+        agent_type: "agent_type"
+        workflow_stage: "workflow_stage"
+
+# Extended observability for multi-agent systems  
+multi_agent_observability:
+  # Enable cross-agent correlation tracking
+  cross_agent_tracking: true
+  
+  # Track agent communication patterns
+  communication_patterns: true
+  
+  # Monitor agent performance relative to peers
+  performance_comparison: true
+  
+  # Track workflow efficiency metrics
+  workflow_efficiency: true
+  
+  # Alert thresholds for multi-agent issues
+  alerting:
+    # Alert when correlation context is lost
+    lost_correlation_threshold: 0.05  # 5% of operations
+    
+    # Alert when agent handoffs exceed time threshold
+    handoff_timeout_seconds: 300
+    
+    # Alert when workflow stages stall
+    stage_stall_threshold_seconds: 1800  # 30 minutes
+    
+    # Alert when tool failure rate exceeds threshold
+    tool_failure_rate_threshold: 0.1  # 10% failure rate
+
+# Development mode configuration
+development:
+  # Enable human-readable log formatting for development
+  pretty_print: true
+  
+  # Colorize log output
+  colorize: true
+  
+  # Include additional debug information
+  debug_info: true
+  
+  # Reduce log volume for development
+  simplified_output: false

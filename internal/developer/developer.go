@@ -67,8 +67,8 @@ func (d *DeveloperAgent) Type() agent.AgentType {
 
 // Run starts the developer agent's polling loop.
 func (d *DeveloperAgent) Run(ctx context.Context) error {
-	// Ensure correlation ID for this agent run
-	ctx = observability.EnsureCorrelationID(ctx)
+	// Ensure enriched correlation context for this agent run
+	ctx = observability.EnsureCorrelationContext(ctx, string(d.Type()), 0)
 	
 	// Log agent start with structured logging
 	if d.Deps.StructuredLogger != nil {
