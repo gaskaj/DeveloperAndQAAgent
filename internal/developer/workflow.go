@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -36,7 +39,7 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 
 	d.logger().Info("processing issue", "number", issueNum, "title", issueTitle)
 
-	// Step 1: Claim
+	// Step 1: Claim — also removes agent:ready to prevent re-processing on restart.
 	d.updateStatus(state.StateClaim, issueNum, "claiming issue")
 	if err := d.claimIssue(ctx, issueNum); err != nil {
 		return fmt.Errorf("claiming issue: %w", err)
@@ -55,48 +58,7 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 		d.logger().Error("failed to save state", "error", err)
 	}
 
-	// Step 2: Analyze
-	d.updateStatus(state.StateAnalyze, issueNum, "analyzing requirements")
-	var labels []string
-	for _, l := range issue.Labels {
-		labels = append(labels, l.GetName())
-	}
-	issueContext := claude.FormatIssueContext(issueNum, issueTitle, issueBody, labels)
-	plan, tooComplex, err := d.analyze(ctx, issueContext)
-	if err != nil {
-		d.failIssue(ctx, ws, fmt.Errorf("analysis failed: %w", err))
-		return err
-	}
-
-	// Post analysis plan as a comment on the issue.
-	analysisComment := fmt.Sprintf("🤖 **Analysis complete**\n\n%s", plan)
-	if d.Deps.Config.Decomposition.Enabled {
-		if est := parseEstimatedIterations(plan); est > 0 {
-			analysisComment += fmt.Sprintf("\n\n---\n**Estimated iterations**: %d | **Budget**: %d",
-				est, d.Deps.Config.Decomposition.MaxIterationBudget)
-		}
-	}
-	_ = d.Deps.GitHub.CreateComment(ctx, issueNum, analysisComment)
-
-	// Step 2.5: Proactive decomposition
-	if tooComplex && d.Deps.Config.Decomposition.Enabled {
-		d.logger().Info("issue too complex, decomposing", "issue", issueNum)
-		childNums, err := d.decompose(ctx, issueNum, issueContext, plan)
-		if err != nil {
-			d.failIssue(ctx, ws, fmt.Errorf("decomposition failed: %w", err))
-			return err
-		}
-		ws.ChildIssues = childNums
-		ws.State = state.StateDecompose
-		ws.UpdatedAt = time.Now()
-		_ = d.Deps.Store.Save(ctx, ws)
-
-		_ = d.processChildIssues(ctx, childNums, issueNum)
-		d.updateStatus(state.StateIdle, 0, "waiting for issues")
-		return nil
-	}
-
-	// Step 3: Setup workspace
+	// Step 2: Setup workspace — moved before analyze so Claude has real codebase context.
 	d.updateStatus(state.StateWorkspace, issueNum, "setting up workspace")
 	branchName := fmt.Sprintf("agent/issue-%d", issueNum)
 	ws.BranchName = branchName
@@ -120,13 +82,58 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 		return err
 	}
 
+	// Gather codebase context for Claude.
+	repoContext := gatherRepoContext(repo)
+
+	// Step 3: Analyze — now receives real codebase structure.
+	d.updateStatus(state.StateAnalyze, issueNum, "analyzing requirements")
+	var labels []string
+	for _, l := range issue.Labels {
+		labels = append(labels, l.GetName())
+	}
+	issueContext := claude.FormatIssueContext(issueNum, issueTitle, issueBody, labels)
+	plan, tooComplex, err := d.analyze(ctx, issueContext, repoContext)
+	if err != nil {
+		d.failIssue(ctx, ws, fmt.Errorf("analysis failed: %w", err))
+		return err
+	}
+
+	// Post analysis plan as a comment on the issue.
+	analysisComment := fmt.Sprintf("🤖 **Analysis complete**\n\n%s", plan)
+	if d.Deps.Config.Decomposition.Enabled {
+		if est := parseEstimatedIterations(plan); est > 0 {
+			analysisComment += fmt.Sprintf("\n\n---\n**Estimated iterations**: %d | **Budget**: %d",
+				est, d.Deps.Config.Decomposition.MaxIterationBudget)
+		}
+	}
+	_ = d.Deps.GitHub.CreateComment(ctx, issueNum, analysisComment)
+
+	// Step 3.5: Proactive decomposition
+	if tooComplex && d.Deps.Config.Decomposition.Enabled {
+		d.logger().Info("issue too complex, decomposing", "issue", issueNum)
+		childNums, err := d.decompose(ctx, issueNum, issueContext, plan)
+		if err != nil {
+			d.failIssue(ctx, ws, fmt.Errorf("decomposition failed: %w", err))
+			return err
+		}
+		ws.ChildIssues = childNums
+		ws.State = state.StateDecompose
+		ws.UpdatedAt = time.Now()
+		_ = d.Deps.Store.Save(ctx, ws)
+
+		_ = d.processChildIssues(ctx, childNums, issueNum)
+		d.updateStatus(state.StateIdle, 0, "waiting for issues")
+		return nil
+	}
+
 	// Step 4: Implement
 	d.updateStatus(state.StateImplement, issueNum, "implementing changes")
+	_ = d.Deps.GitHub.AddLabels(ctx, issueNum, []string{"agent:in-progress"})
 	ws.State = state.StateImplement
 	ws.UpdatedAt = time.Now()
 	_ = d.Deps.Store.Save(ctx, ws)
 
-	if err := d.implement(ctx, repo, issueContext, plan); err != nil {
+	if err := d.implement(ctx, repo, issueContext, plan, repoContext); err != nil {
 		// Reactive decomposition: if iteration limit hit and decomposition enabled.
 		if claude.IsMaxIterationsError(err) && d.Deps.Config.Decomposition.Enabled {
 			d.logger().Info("iteration limit hit, reactively decomposing", "issue", issueNum)
@@ -194,7 +201,7 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 
 	// Step 7: Update labels and complete
 	d.updateStatus(state.StateReview, issueNum, "awaiting review")
-	_ = d.Deps.GitHub.RemoveLabel(ctx, issueNum, "agent:ready")
+	_ = d.Deps.GitHub.RemoveLabel(ctx, issueNum, "agent:in-progress")
 	_ = d.Deps.GitHub.AddLabels(ctx, issueNum, []string{"agent:in-review"})
 
 	d.logger().Info("issue completed",
@@ -216,13 +223,15 @@ func (d *DeveloperAgent) claimIssue(ctx context.Context, number int) error {
 	if err := d.Deps.GitHub.AddLabels(ctx, number, []string{"agent:claimed"}); err != nil {
 		return err
 	}
+	// Remove agent:ready immediately to prevent re-processing on crash/restart.
+	_ = d.Deps.GitHub.RemoveLabel(ctx, number, "agent:ready")
 	if err := d.Deps.GitHub.CreateComment(ctx, number, "🤖 Developer agent claiming this issue. Starting analysis..."); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (d *DeveloperAgent) analyze(ctx context.Context, issueContext string) (plan string, tooComplex bool, err error) {
+func (d *DeveloperAgent) analyze(ctx context.Context, issueContext, repoContext string) (plan string, tooComplex bool, err error) {
 	conv := claude.NewConversation(
 		d.Deps.Claude,
 		SystemPrompt,
@@ -233,6 +242,11 @@ func (d *DeveloperAgent) analyze(ctx context.Context, issueContext string) (plan
 	)
 
 	prompt := fmt.Sprintf(AnalyzePrompt, issueContext)
+
+	// Inject codebase structure so the plan is based on real files.
+	if repoContext != "" {
+		prompt += "\n\n" + repoContext
+	}
 
 	// When decomposition is enabled, append complexity estimation to the prompt.
 	if d.Deps.Config.Decomposition.Enabled {
@@ -254,7 +268,7 @@ func (d *DeveloperAgent) analyze(ctx context.Context, issueContext string) (plan
 	return response, tooComplex, nil
 }
 
-func (d *DeveloperAgent) implement(ctx context.Context, repo *gitops.Repo, issueContext, plan string) error {
+func (d *DeveloperAgent) implement(ctx context.Context, repo *gitops.Repo, issueContext, plan, repoContext string) error {
 	executor := d.createToolExecutor(repo)
 
 	// Use the configured iteration budget when decomposition is enabled; default otherwise.
@@ -273,6 +287,18 @@ func (d *DeveloperAgent) implement(ctx context.Context, repo *gitops.Repo, issue
 	)
 
 	prompt := fmt.Sprintf(ImplementPrompt, issueContext, plan)
+
+	// Inject codebase structure so Claude doesn't waste iterations discovering it.
+	if repoContext != "" {
+		prompt += "\n\n" + repoContext
+	}
+
+	// Pre-read files mentioned in the plan so Claude can start writing immediately.
+	filePaths := extractFilePaths(plan)
+	if preRead := preReadFiles(repo, filePaths); preRead != "" {
+		prompt += "\n\n" + preRead
+	}
+
 	_, err := conv.Send(ctx, prompt)
 	return err
 }
@@ -335,3 +361,88 @@ func (d *DeveloperAgent) failIssue(ctx context.Context, ws *state.AgentWorkState
 	d.updateStatus(state.StateIdle, 0, "waiting for issues")
 }
 
+// gatherRepoContext builds a file tree and go.mod summary for injection into prompts.
+// This eliminates the need for Claude to waste iterations discovering project structure.
+func gatherRepoContext(repo *gitops.Repo) string {
+	var sb strings.Builder
+	sb.WriteString("## Repository Structure\n\n```\n")
+
+	repoDir := repo.Dir()
+	_ = filepath.WalkDir(repoDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		rel, _ := filepath.Rel(repoDir, path)
+		if rel == "." {
+			return nil
+		}
+		// Skip hidden dirs (.git), workspaces, and vendor.
+		if d.IsDir() && (strings.HasPrefix(d.Name(), ".") || d.Name() == "workspaces" || d.Name() == "vendor") {
+			return filepath.SkipDir
+		}
+		indent := strings.Repeat("  ", strings.Count(rel, string(filepath.Separator)))
+		name := d.Name()
+		if d.IsDir() {
+			name += "/"
+		}
+		sb.WriteString(indent + name + "\n")
+		return nil
+	})
+
+	sb.WriteString("```\n\n")
+
+	// Include go.mod for module path and dependencies.
+	if content, err := repo.ReadFile("go.mod"); err == nil {
+		sb.WriteString("### go.mod\n```\n")
+		sb.WriteString(content)
+		sb.WriteString("\n```\n")
+	}
+
+	return sb.String()
+}
+
+// extractFilePaths finds Go file paths mentioned in the plan text.
+func extractFilePaths(plan string) []string {
+	re := regexp.MustCompile(`(?:^|[\s` + "`" + `\(])((?:[a-zA-Z0-9_]+/)*[a-zA-Z0-9_]+\.go)\b`)
+	matches := re.FindAllStringSubmatch(plan, -1)
+	seen := make(map[string]bool)
+	var paths []string
+	for _, m := range matches {
+		p := m[1]
+		if !seen[p] {
+			seen[p] = true
+			paths = append(paths, p)
+		}
+	}
+	return paths
+}
+
+// preReadFiles reads files from the repo that are mentioned in the plan,
+// so Claude doesn't need to spend iterations reading them.
+func preReadFiles(repo *gitops.Repo, paths []string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("## Pre-read Files\n\nThese files from the plan have been pre-loaded to save iterations.\nYou do NOT need to read_file these again — start writing immediately.\n\n")
+	count := 0
+	for _, p := range paths {
+		content, err := repo.ReadFile(p)
+		if err != nil {
+			continue // file doesn't exist yet, that's fine
+		}
+		// Truncate very large files.
+		if len(content) > 4000 {
+			content = content[:4000] + "\n... (truncated at 4000 chars)"
+		}
+		sb.WriteString(fmt.Sprintf("### %s\n```go\n%s\n```\n\n", p, content))
+		count++
+		if count >= 8 {
+			break // cap to avoid massive prompts
+		}
+	}
+	if count == 0 {
+		return ""
+	}
+	return sb.String()
+}

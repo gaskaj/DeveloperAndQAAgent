@@ -10,6 +10,10 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
+// maxToolResultLen is the maximum character length for a single tool result.
+// Results exceeding this are truncated to prevent unbounded message history growth.
+const maxToolResultLen = 20000
+
 // ErrMaxIterations is returned when a conversation exceeds the maximum allowed iterations.
 var ErrMaxIterations = errors.New("conversation exceeded maximum iterations")
 
@@ -128,10 +132,18 @@ func (c *Conversation) processToolCalls(ctx context.Context, msg *anthropic.Mess
 			continue
 		}
 
-		results = append(results, anthropic.NewToolResultBlock(block.ID, result, false))
+		results = append(results, anthropic.NewToolResultBlock(block.ID, truncateToolResult(result), false))
 	}
 
 	return results, nil
+}
+
+// truncateToolResult truncates a tool result string if it exceeds maxToolResultLen.
+func truncateToolResult(result string) string {
+	if len(result) <= maxToolResultLen {
+		return result
+	}
+	return fmt.Sprintf("%s\n\n... (output truncated, showing %d of %d bytes)", result[:maxToolResultLen], maxToolResultLen, len(result))
 }
 
 func assistantMessageFromResponse(msg *anthropic.Message) anthropic.MessageParam {

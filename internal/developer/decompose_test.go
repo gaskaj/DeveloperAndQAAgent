@@ -182,6 +182,43 @@ func TestFirstLine_LeadingNewlines(t *testing.T) {
 	assert.Equal(t, "Content here", firstLine("\n\n  Content here\nMore"))
 }
 
+// --- extractFilePaths tests ---
+
+func TestExtractFilePaths_GoFiles(t *testing.T) {
+	plan := `## Files to modify
+1. internal/developer/workflow.go - add self-assign logic
+2. internal/ghub/client.go - update interface
+3. internal/developer/workflow_test.go - add tests`
+	paths := extractFilePaths(plan)
+	assert.Contains(t, paths, "internal/developer/workflow.go")
+	assert.Contains(t, paths, "internal/ghub/client.go")
+	assert.Contains(t, paths, "internal/developer/workflow_test.go")
+}
+
+func TestExtractFilePaths_NoDuplicates(t *testing.T) {
+	plan := "Modify internal/developer/workflow.go and also update internal/developer/workflow.go"
+	paths := extractFilePaths(plan)
+	count := 0
+	for _, p := range paths {
+		if p == "internal/developer/workflow.go" {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count)
+}
+
+func TestExtractFilePaths_NoMatches(t *testing.T) {
+	plan := "This plan mentions no Go files at all."
+	paths := extractFilePaths(plan)
+	assert.Empty(t, paths)
+}
+
+func TestExtractFilePaths_BacktickPaths(t *testing.T) {
+	plan := "Update `internal/config/config.go` with the new field."
+	paths := extractFilePaths(plan)
+	assert.Contains(t, paths, "internal/config/config.go")
+}
+
 func TestHasLabel_Match(t *testing.T) {
 	issue := &github.Issue{
 		Labels: []*github.Label{
