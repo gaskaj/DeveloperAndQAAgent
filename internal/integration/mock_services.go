@@ -2,11 +2,16 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
 	"github.com/google/go-github/v68/github"
@@ -469,7 +474,9 @@ func (m *MockGitHubClient) CreatePR(ctx context.Context, options ghub.PROptions)
 	}, nil
 }
 
-// SimpleClaudeClient is a minimal mock that focuses on testing agent behavior
+// SimpleClaudeClient is a minimal mock that focuses on testing agent behavior.
+// It is still available for test-level configuration (e.g. setting responses),
+// but the actual HTTP mock is provided by MockClaudeServer.
 type SimpleClaudeClient struct {
 	mu             sync.RWMutex
 	responses      map[string]string
@@ -522,14 +529,190 @@ func (s *SimpleClaudeClient) GetCallCount() int {
 	return s.callCount
 }
 
-// For integration tests, we'll use a wrapper that satisfies the claude.Client interface
-// but delegates to our simple mock for predictable behavior
-type ClaudeClientWrapper struct {
-	simple *SimpleClaudeClient
+// MockClaudeServer is an httptest.Server that mimics the Anthropic Messages API.
+// It detects whether the request includes tool definitions (implement step) and
+// returns an appropriate tool_use or text response. A response queue allows tests
+// to override responses for specific calls (e.g. decompose analysis).
+type MockClaudeServer struct {
+	server       *httptest.Server
+	callCount    atomic.Int64
+	toolUseCount atomic.Int64
+	mu           sync.RWMutex
+	responseText string
+	// responseQueue is a FIFO queue of text responses. When non-empty, the
+	// front element is consumed instead of responseText for non-tool requests.
+	responseQueue []string
+	httpErrorCode int
+	httpErrorBody string
 }
 
-func NewClaudeClientWrapper(simple *SimpleClaudeClient) *ClaudeClientWrapper {
-	return &ClaudeClientWrapper{simple: simple}
+// NewMockClaudeServer starts a mock HTTP server that handles /v1/messages.
+func NewMockClaudeServer() *MockClaudeServer {
+	m := &MockClaudeServer{
+		responseText: "## Analysis Complete\n\nThis issue requires implementing a new feature.\n\n## Implementation Plan\n\n1. Create new file\n2. Add tests\n3. Update docs\n\n**Estimated iterations**: 5\n**Fits within budget**: yes",
+	}
+
+	m.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		m.callCount.Add(1)
+
+		// Parse request body to detect tools and tool_result messages.
+		var reqBody struct {
+			Tools    []json.RawMessage `json:"tools"`
+			Messages []struct {
+				Content json.RawMessage `json:"content"`
+			} `json:"messages"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&reqBody)
+
+		m.mu.RLock()
+		errCode := m.httpErrorCode
+		errBody := m.httpErrorBody
+		m.mu.RUnlock()
+
+		if errCode != 0 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(errCode)
+			errResp := map[string]interface{}{
+				"type": "error",
+				"error": map[string]interface{}{
+					"type":    "api_error",
+					"message": errBody,
+				},
+			}
+			json.NewEncoder(w).Encode(errResp)
+			return
+		}
+
+		// Detect whether tools are present (implement step) and whether the
+		// conversation already contains a tool_result (follow-up after tool execution).
+		hasTools := len(reqBody.Tools) > 0
+		hasToolResult := false
+		for _, msg := range reqBody.Messages {
+			var blocks []struct {
+				Type string `json:"type"`
+			}
+			if json.Unmarshal(msg.Content, &blocks) == nil {
+				for _, b := range blocks {
+					if b.Type == "tool_result" {
+						hasToolResult = true
+					}
+				}
+			}
+		}
+
+		// First request with tools (no tool_result yet): return a tool_use
+		// response that writes a file so the commit step has something to stage.
+		if hasTools && !hasToolResult {
+			count := m.toolUseCount.Add(1)
+			resp := map[string]interface{}{
+				"id":    fmt.Sprintf("msg_test_%d", m.callCount.Load()),
+				"type":  "message",
+				"role":  "assistant",
+				"model": "claude-3-haiku-20240307",
+				"content": []map[string]interface{}{
+					{
+						"type": "tool_use",
+						"id":   fmt.Sprintf("toolu_test_%d", count),
+						"name": "write_file",
+						"input": map[string]interface{}{
+							"path":    "implementation.go",
+							"content": "package main\n\n// Auto-generated implementation\nfunc main() {}\n",
+						},
+					},
+				},
+				"stop_reason": "tool_use",
+				"usage": map[string]interface{}{
+					"input_tokens":  100,
+					"output_tokens": 50,
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		// All other requests: return a text response from queue or default.
+		m.mu.Lock()
+		var text string
+		if len(m.responseQueue) > 0 {
+			text = m.responseQueue[0]
+			m.responseQueue = m.responseQueue[1:]
+		} else {
+			text = m.responseText
+		}
+		m.mu.Unlock()
+
+		resp := map[string]interface{}{
+			"id":    fmt.Sprintf("msg_test_%d", m.callCount.Load()),
+			"type":  "message",
+			"role":  "assistant",
+			"model": "claude-3-haiku-20240307",
+			"content": []map[string]interface{}{
+				{
+					"type": "text",
+					"text": text,
+				},
+			},
+			"stop_reason": "end_turn",
+			"usage": map[string]interface{}{
+				"input_tokens":  100,
+				"output_tokens": 50,
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+
+	return m
+}
+
+// SetResponse changes the text returned by the mock server.
+func (m *MockClaudeServer) SetResponse(text string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.responseText = text
+	m.httpErrorCode = 0
+	m.httpErrorBody = ""
+}
+
+// SetHTTPError makes the mock server return the given HTTP error code.
+func (m *MockClaudeServer) SetHTTPError(code int, message string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.httpErrorCode = code
+	m.httpErrorBody = message
+}
+
+// EnqueueResponse adds a text response to the FIFO queue. Queued responses
+// are consumed before the default responseText for non-tool requests.
+func (m *MockClaudeServer) EnqueueResponse(text string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.responseQueue = append(m.responseQueue, text)
+}
+
+// ClearHTTPError removes any configured HTTP error so subsequent requests succeed.
+func (m *MockClaudeServer) ClearHTTPError() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.httpErrorCode = 0
+	m.httpErrorBody = ""
+}
+
+// RequestOption returns an option.WithBaseURL pointing at the mock server.
+func (m *MockClaudeServer) RequestOption() option.RequestOption {
+	return option.WithBaseURL(m.server.URL)
+}
+
+// Close shuts down the mock server.
+func (m *MockClaudeServer) Close() {
+	m.server.Close()
+}
+
+// CallCount returns how many requests the mock server has received.
+func (m *MockClaudeServer) CallCount() int64 {
+	return m.callCount.Load()
 }
 
 // MockStore implements state.Store interface for testing

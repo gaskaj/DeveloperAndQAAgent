@@ -17,8 +17,16 @@ type Repo struct {
 	authToken string
 }
 
+// CloneFn is the function used to clone repositories.
+// Tests can override this to provide mock clone behaviour.
+var CloneFn = defaultClone
+
 // Clone clones a repository to the given directory.
 func Clone(url, dir, token string) (*Repo, error) {
+	return CloneFn(url, dir, token)
+}
+
+func defaultClone(url, dir, token string) (*Repo, error) {
 	repo, err := git.PlainClone(dir, false, &git.CloneOptions{
 		URL: url,
 		Auth: &http.BasicAuth{
@@ -99,4 +107,10 @@ func (r *Repo) Push() error {
 // Dir returns the working directory path.
 func (r *Repo) Dir() string {
 	return r.dir
+}
+
+// NewRepoFromWorktree creates a Repo from an existing go-git repository and worktree.
+// This is used by tests to construct Repo objects from locally-cloned repositories.
+func NewRepoFromWorktree(repo *git.Repository, wt *git.Worktree, dir, token string) *Repo {
+	return &Repo{repo: repo, worktree: wt, dir: dir, authToken: token}
 }

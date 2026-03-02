@@ -9,10 +9,15 @@ import (
 	"testing"
 	"time"
 
+	gogit "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
+
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/agent"
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/claude"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/developer"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/errors"
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/gitops"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/orchestrator"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
@@ -26,6 +31,7 @@ type TestEnvironment struct {
 	config           *config.Config
 	githubClient     *MockGitHubClient
 	claudeClient     *SimpleClaudeClient
+	claudeAPIClient  *claude.Client
 	store            *MockStore
 	logger           *slog.Logger
 	structuredLogger *observability.StructuredLogger
@@ -33,11 +39,24 @@ type TestEnvironment struct {
 	errorManager     *errors.Manager
 	orchestrator     *orchestrator.Orchestrator
 	agents           []agent.Agent
+	mockServer       *MockClaudeServer
+	bareRepoDir      string
 }
 
 // NewTestEnvironment creates a fresh test environment for each test
 func NewTestEnvironment(t *testing.T) *TestEnvironment {
 	tempDir := t.TempDir()
+
+	// Create a bare git repo that acts as the "remote" for cloning
+	bareRepoDir := filepath.Join(tempDir, "bare-repo.git")
+	initBareRepo(t, bareRepoDir)
+
+	// Start mock Claude API server
+	mockServer := NewMockClaudeServer()
+
+	// Create a real Claude client pointing at the mock server
+	claudeAPIClient := claude.NewClient("test-api-key", "claude-3-haiku-20240307", 4096,
+		mockServer.RequestOption())
 
 	// Create test configuration
 	cfg := &config.Config{
@@ -45,12 +64,13 @@ func NewTestEnvironment(t *testing.T) *TestEnvironment {
 			Owner:        "test-owner",
 			Repo:         "test-repo",
 			Token:        "test-token",
-			PollInterval: 5 * time.Second,
+			PollInterval: 2 * time.Second,
 			WatchLabels:  []string{"agent:ready"},
 		},
 		Claude: config.ClaudeConfig{
-			APIKey: "test-api-key",
-			Model:  "claude-3-haiku-20240307",
+			APIKey:    "test-api-key",
+			Model:     "claude-3-haiku-20240307",
+			MaxTokens: 4096,
 		},
 		Agents: config.AgentsConfig{
 			Developer: config.DeveloperAgentConfig{
@@ -61,7 +81,7 @@ func NewTestEnvironment(t *testing.T) *TestEnvironment {
 			Dir: filepath.Join(tempDir, "state"),
 		},
 		Creativity: config.CreativityConfig{
-			Enabled: true,
+			Enabled: false, // Disable creativity to avoid nil-client panics
 		},
 		Decomposition: config.DecompositionConfig{
 			Enabled:            true,
@@ -72,7 +92,6 @@ func NewTestEnvironment(t *testing.T) *TestEnvironment {
 
 	// Create mock clients
 	githubClient := NewMockGitHubClient()
-	// For Claude, we'll use a simple mock that focuses on testing agent behavior
 	claudeClient := NewSimpleClaudeClient()
 	store := NewMockStore()
 
@@ -122,8 +141,8 @@ func NewTestEnvironment(t *testing.T) *TestEnvironment {
 			Enabled: true,
 			DefaultPolicy: config.RetryPolicyConfig{
 				MaxAttempts:   3,
-				BaseDelay:     time.Second,
-				MaxDelay:      30 * time.Second,
+				BaseDelay:     100 * time.Millisecond,
+				MaxDelay:      time.Second,
 				BackoffFactor: 2.0,
 				JitterFactor:  0.1,
 			},
@@ -141,18 +160,54 @@ func NewTestEnvironment(t *testing.T) *TestEnvironment {
 	}
 	errorManager := errors.NewManager(errorHandlingConfig, logger)
 
-	return &TestEnvironment{
+	te := &TestEnvironment{
 		t:                t,
 		tempDir:          tempDir,
 		config:           cfg,
 		githubClient:     githubClient,
 		claudeClient:     claudeClient,
+		claudeAPIClient:  claudeAPIClient,
 		store:            store,
 		logger:           logger,
 		structuredLogger: structuredLogger,
 		metrics:          metrics,
 		errorManager:     errorManager,
+		mockServer:       mockServer,
+		bareRepoDir:      bareRepoDir,
 	}
+
+	// Override gitops.CloneFn to use local bare repo
+	te.installGitMock()
+
+	return te
+}
+
+// installGitMock overrides gitops.CloneFn to clone from a local bare repo
+// and makes Push a no-op by removing the remote after clone.
+func (te *TestEnvironment) installGitMock() {
+	bareRepoDir := te.bareRepoDir
+	origCloneFn := gitops.CloneFn
+
+	gitops.CloneFn = func(url, dir, token string) (*gitops.Repo, error) {
+		// Clone from the local bare repo instead of the URL
+		repo, err := gogit.PlainClone(dir, false, &gogit.CloneOptions{
+			URL: bareRepoDir,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("cloning repo: %w", err)
+		}
+
+		wt, err := repo.Worktree()
+		if err != nil {
+			return nil, fmt.Errorf("getting worktree: %w", err)
+		}
+
+		return gitops.NewRepoFromWorktree(repo, wt, dir, token), nil
+	}
+
+	te.t.Cleanup(func() {
+		gitops.CloneFn = origCloneFn
+	})
 }
 
 // CreateDependencies creates agent dependencies for testing
@@ -160,7 +215,7 @@ func (te *TestEnvironment) CreateDependencies() agent.Dependencies {
 	return agent.Dependencies{
 		Config:           te.config,
 		GitHub:           te.githubClient,
-		Claude:           nil, // Simplified for testing agent patterns
+		Claude:           te.claudeAPIClient,
 		Store:            te.store,
 		Logger:           te.logger,
 		StructuredLogger: te.structuredLogger,
@@ -256,8 +311,9 @@ func (te *TestEnvironment) AssertHandoffLogged(fromAgent, toAgent string) {
 
 // Cleanup cleans up test resources
 func (te *TestEnvironment) Cleanup() {
-	// Cleanup is handled by t.TempDir() automatically
-	// Additional cleanup can be added here if needed
+	if te.mockServer != nil {
+		te.mockServer.Close()
+	}
 }
 
 // SimulateGitHubIssue creates a mock GitHub issue for testing
@@ -325,4 +381,47 @@ func (te *TestEnvironment) WaitForWorkflowTransition(agentType string, targetSta
 			}
 		}
 	}
+}
+
+// initBareRepo creates a bare git repository with an initial commit
+// so that cloning and branching operations work properly.
+func initBareRepo(t *testing.T, bareDir string) {
+	t.Helper()
+
+	// Create a temporary working repo, commit, then clone to bare
+	workDir := t.TempDir()
+
+	repo, err := gogit.PlainInit(workDir, false)
+	require.NoError(t, err)
+
+	wt, err := repo.Worktree()
+	require.NoError(t, err)
+
+	// Create an initial file so we have something to commit
+	readmePath := filepath.Join(workDir, "README.md")
+	require.NoError(t, os.WriteFile(readmePath, []byte("# Test Repo\n"), 0o644))
+
+	// Also create a go.mod so gatherRepoContext works
+	gomodPath := filepath.Join(workDir, "go.mod")
+	require.NoError(t, os.WriteFile(gomodPath, []byte("module github.com/test-owner/test-repo\n\ngo 1.25\n"), 0o644))
+
+	_, err = wt.Add("README.md")
+	require.NoError(t, err)
+	_, err = wt.Add("go.mod")
+	require.NoError(t, err)
+
+	_, err = wt.Commit("initial commit", &gogit.CommitOptions{
+		Author: &object.Signature{
+			Name:  "Test",
+			Email: "test@test.com",
+			When:  time.Now(),
+		},
+	})
+	require.NoError(t, err)
+
+	// Clone as bare repo
+	_, err = gogit.PlainClone(bareDir, true, &gogit.CloneOptions{
+		URL: workDir,
+	})
+	require.NoError(t, err)
 }

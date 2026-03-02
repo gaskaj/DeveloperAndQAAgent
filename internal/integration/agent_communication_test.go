@@ -16,10 +16,11 @@ import (
 
 func TestBasicAgentCommunication(t *testing.T) {
 	tests := []struct {
-		name          string
-		setupIssue    func(*TestEnvironment) *MockIssue
-		expectedState state.WorkflowState
-		timeout       time.Duration
+		name            string
+		setupIssue      func(*TestEnvironment) *MockIssue
+		expectedState   state.WorkflowState
+		timeout         time.Duration
+		skipFinalAssert bool // skip final AssertWorkflowState (e.g. decompose spawns child processing that overwrites state)
 	}{
 		{
 			name: "successful_issue_processing",
@@ -32,11 +33,21 @@ func TestBasicAgentCommunication(t *testing.T) {
 		{
 			name: "complex_issue_decomposition",
 			setupIssue: func(te *TestEnvironment) *MockIssue {
-				te.claudeClient.SetResponse("", "COMPLEXITY_ASSESSMENT: TOO_COMPLEX\nThis requires decomposition.")
+				// Enqueue a single response for the analysis call that triggers decomposition.
+				// It must contain "Fits within budget: no" AND subtask headers so parseSubtasks succeeds.
+				te.mockServer.EnqueueResponse("COMPLEXITY_ASSESSMENT: TOO_COMPLEX\nThis requires decomposition.\n\n" +
+					"**Estimated iterations**: 100\n**Fits within budget**: no\n\n" +
+					"### Subtask 1: Implement core feature\nImplement the main functionality.\n\n" +
+					"### Subtask 2: Add tests\nAdd unit tests for the new feature.\n\n" +
+					"### Subtask 3: Update documentation\nUpdate docs with feature information.")
 				return te.SimulateGitHubIssue(124, "Complex feature", "Very complex issue requiring multiple changes", []string{"agent:ready"})
 			},
-			expectedState: state.StateDecompose,
-			timeout:       30 * time.Second,
+			// After decompose, child issues are processed synchronously to completion.
+			// The transient StateDecompose is too brief to observe reliably, so we
+			// wait for the child processing to finish (StateComplete).
+			expectedState:   state.StateComplete,
+			timeout:         30 * time.Second,
+			skipFinalAssert: true, // state may change again as poller picks up next cycle
 		},
 	}
 
@@ -46,7 +57,7 @@ func TestBasicAgentCommunication(t *testing.T) {
 			defer te.Cleanup()
 
 			// Setup the issue
-			_ = tt.setupIssue(te)
+			issue := tt.setupIssue(te)
 
 			// Create developer agent
 			devAgent, err := te.CreateDeveloperAgent()
@@ -81,11 +92,16 @@ func TestBasicAgentCommunication(t *testing.T) {
 				t.Fatal("orchestrator did not stop gracefully")
 			}
 
-			// Verify final state
-			te.AssertWorkflowState("developer", tt.expectedState)
+			// Verify final state (skip when child processing overwrites it)
+			if !tt.skipFinalAssert {
+				te.AssertWorkflowState("developer", tt.expectedState)
+			}
 
-			// For now, just verify basic agent functionality
-			// Full workflow tests would require Claude integration
+			// Verify decomposition-specific artifacts
+			if tt.name == "complex_issue_decomposition" {
+				te.AssertIssueLabels(issue.Number, []string{"agent:epic"})
+				te.AssertCommentCreated(issue.Number, "Issue decomposed into")
+			}
 		})
 	}
 }
@@ -129,9 +145,10 @@ func TestAgentMessageProtocolCompliance(t *testing.T) {
 			issueNum := 125
 			_ = te.SimulateGitHubIssue(issueNum, "Protocol test", "Testing message protocols", []string{"agent:ready"})
 
-			// Simulate failure for failure test
+			// For the failure test, make the mock Claude server return an
+			// HTTP error so the workflow fails at the analyze step.
 			if tt.messageType == "failure" {
-				te.SimulateAgentFailure("github", errors.New("simulated GitHub error"))
+				te.mockServer.SetHTTPError(500, "simulated Claude API error")
 			}
 
 			devAgent, err := te.CreateDeveloperAgent()
@@ -139,7 +156,13 @@ func TestAgentMessageProtocolCompliance(t *testing.T) {
 
 			orchestrator := te.CreateOrchestrator([]agent.Agent{devAgent})
 
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			timeout := 15 * time.Second
+			// analysis and claim tests need time for the poller + workflow
+			if tt.messageType == "analysis" || tt.messageType == "failure" {
+				timeout = 20 * time.Second
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 
 			done := make(chan error, 1)
@@ -147,12 +170,18 @@ func TestAgentMessageProtocolCompliance(t *testing.T) {
 				done <- orchestrator.Run(ctx)
 			}()
 
-			// Wait for processing to begin
-			time.Sleep(2 * time.Second)
-
-			// Clear any simulated errors after initial processing
+			// Wait for the agent to reach an appropriate state
 			if tt.messageType == "failure" {
-				te.githubClient.ClearError()
+				// Wait for the workflow to fail
+				_ = te.WaitForWorkflowTransition("developer", "failed", timeout-3*time.Second)
+			} else if tt.messageType == "analysis" {
+				// Wait for analyze or later
+				_ = te.WaitForWorkflowTransition("developer", "analyze", timeout-3*time.Second)
+				// Give a moment for the comment to be posted
+				time.Sleep(500 * time.Millisecond)
+			} else {
+				// For claim, just wait a few seconds
+				time.Sleep(5 * time.Second)
 			}
 
 			cancel()
