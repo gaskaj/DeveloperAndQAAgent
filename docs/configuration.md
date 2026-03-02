@@ -193,10 +193,68 @@ Applied by `config.Validate()` when fields are zero-valued:
 
 ## Validation
 
-`config.Validate()` checks:
-- Required fields are non-empty (returns aggregated errors via `errors.Join`)
-- Applies defaults for optional fields with zero values
-- Called automatically by `config.Load()`
+The configuration system provides comprehensive validation with multiple levels:
+
+### Basic Validation (`config.Validate()`)
+- ✅ Required fields are non-empty  
+- ✅ Token format validation (GitHub, Claude)
+- ✅ Interdependency checks (e.g., `max_concurrent > 0` when agent enabled)
+- ✅ Applies defaults for optional fields
+- ✅ Returns structured error messages with fixes and examples
+
+### Enhanced Validation (`config.ValidateWithContext()`)
+- ✅ All basic validation checks
+- ✅ Workspace directory permissions (create/write tests)
+- ✅ State directory accessibility  
+- ✅ Optional network validation (GitHub/Claude API connectivity)
+- ✅ Token scope verification (repo, read:user)
+- ✅ Repository access verification
+
+### Validation Methods
+
+```go
+// Basic validation (fast, no network calls)
+cfg, err := config.Load(configPath)
+
+// Skip network validation for faster startup
+cfg, err := config.LoadWithOptions(configPath, true)
+
+// Full validation with network checks
+cfg, err := config.LoadWithSchemaValidation(configPath)
+```
+
+### CLI Validation
+
+```bash
+# Basic validation
+agentctl validate --config configs/config.yaml
+
+# Full validation with network connectivity tests
+agentctl validate --config configs/config.yaml --full
+
+# Skip network tests (faster)
+agentctl validate --config configs/config.yaml --skip-network
+```
+
+### Error Messages
+
+Structured validation errors provide actionable feedback:
+
+```
+github.token: token format appears invalid. Fix: Use a personal access token from GitHub settings. Example: ghp_xxxxxxxxxxxxxxxxxxxx
+
+agents.developer.max_concurrent: must be greater than 0 when developer agent is enabled. Fix: Set to a positive integer (recommended: 1-3). Example: 1
+```
+
+### Troubleshooting Common Issues
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `github.token is required` | Missing environment variable | Set `GITHUB_TOKEN` environment variable |
+| `token format appears invalid` | Wrong token format | Use personal access token (ghp_xxx) or fine-grained token (github_pat_xxx) |
+| `repository not accessible` | Permission or existence issue | Verify repo exists and token has access |
+| `directory is not writable` | Filesystem permissions | Fix directory permissions or choose different path |
+| `API key authentication failed` | Invalid Claude key | Check API key in Anthropic Console |
 
 ## Configuration Files
 

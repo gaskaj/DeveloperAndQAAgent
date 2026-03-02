@@ -39,7 +39,7 @@ logging:
 `
 	require.NoError(t, os.WriteFile(cfgPath, []byte(content), 0o644))
 
-	cfg, err := Load(cfgPath)
+	cfg, err := LoadWithOptions(cfgPath, true) // Skip network validation in tests
 	require.NoError(t, err)
 
 	assert.Equal(t, "ghp_test123", cfg.GitHub.Token)
@@ -78,7 +78,7 @@ claude:
 `
 	require.NoError(t, os.WriteFile(cfgPath, []byte(content), 0o644))
 
-	cfg, err := Load(cfgPath)
+	cfg, err := LoadWithOptions(cfgPath, true) // Skip network validation in tests
 	require.NoError(t, err)
 
 	assert.Equal(t, "ghp_fromenv", cfg.GitHub.Token)
@@ -96,10 +96,12 @@ github:
 `
 	require.NoError(t, os.WriteFile(cfgPath, []byte(content), 0o644))
 
-	_, err := Load(cfgPath)
+	_, err := LoadWithOptions(cfgPath, true) // Skip network validation in tests
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "github.token is required")
-	assert.Contains(t, err.Error(), "claude.api_key is required")
+	assert.Contains(t, err.Error(), "github.token")
+	assert.Contains(t, err.Error(), "required field is empty")
+	assert.Contains(t, err.Error(), "claude.api_key")
+	assert.Contains(t, err.Error(), "required field is empty")
 }
 
 func TestLoad_Defaults(t *testing.T) {
@@ -116,7 +118,7 @@ claude:
 `
 	require.NoError(t, os.WriteFile(cfgPath, []byte(content), 0o644))
 
-	cfg, err := Load(cfgPath)
+	cfg, err := LoadWithOptions(cfgPath, true) // Skip network validation in tests
 	require.NoError(t, err)
 
 	assert.Equal(t, "claude-sonnet-4-20250514", cfg.Claude.Model)

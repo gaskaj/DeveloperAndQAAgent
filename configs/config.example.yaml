@@ -1,56 +1,111 @@
 # DeveloperAndQAAgent Configuration
 #
 # Environment variables can be used with ${VAR_NAME} syntax.
+# All ${VAR_NAME} references are expanded from environment variables at runtime.
+# See docs/environment-variables.md for complete reference.
 
 github:
   # Personal access token (repo scope required)
+  # Generate at: https://github.com/settings/tokens
+  # Required scopes: repo, read:user
+  # Format: ghp_xxxxxxxxxxxxxxxxxxxx or github_pat_xxxxxxxxxxxxxxxxxxxx
   token: "${GITHUB_TOKEN}"
-  # Repository owner
+  
+  # Repository owner (organization or username)
+  # Example: "myorg" or "myusername"
   owner: "gaskaj"
+  
   # Repository name
+  # Example: "my-project"
   repo: "DeveloperAndQAAgent"
-  # Polling interval for new events
+  
+  # Polling interval for checking new GitHub events
+  # Supported formats: "30s", "1m", "5m"
+  # Minimum recommended: "10s", Maximum recommended: "5m"
   poll_interval: "30s"
+  
   # Labels to watch for claimable issues
+  # Agent will only process issues with these labels
+  # Labels are automatically managed: agent:ready -> agent:claimed -> agent:working
   watch_labels:
     - "agent:ready"
 
 claude:
   # Anthropic API key
+  # Get from: https://console.anthropic.com/
+  # Format: sk-ant-api03-xxxxxxxxxxxx
+  # Keep this secret and never commit to version control
   api_key: "${ANTHROPIC_API_KEY}"
-  # Model to use
+  
+  # Claude model to use for code generation
+  # Available models: claude-sonnet-4-20250514, claude-sonnet-4-20241022
+  # Recommended: claude-sonnet-4-20250514 (latest)
   model: "claude-sonnet-4-20250514"
-  # Maximum tokens per response
+  
+  # Maximum tokens per response (limits response length)
+  # Range: 1-8192, Recommended: 8192 for code generation
+  # Lower values = faster responses, higher values = more complete code
   max_tokens: 8192
 
 agents:
   developer:
+    # Enable/disable the developer agent
     enabled: true
-    # Maximum concurrent issues to work on
+    
+    # Maximum concurrent issues to work on simultaneously  
+    # Recommended: 1-3 (higher values increase resource usage)
+    # Must be > 0 when agent is enabled
     max_concurrent: 1
-    # Directory for cloned workspaces
+    
+    # Directory for cloned repository workspaces
+    # Must be writable by the agent process
+    # Each issue gets its own workspace subdirectory
+    # Example: "./workspaces/issue-123/"
     workspace_dir: "./workspaces"
 
 state:
-  # State storage backend: "file"
+  # State storage backend
+  # Currently only "file" is supported
   backend: "file"
-  # Directory for state files
+  
+  # Directory for persistent agent state files
+  # Must be writable and persistent across restarts
+  # Contains JSON files tracking agent workflow state
   dir: ".agentctl/state"
 
 logging:
   # Log level: debug, info, warn, error
+  # debug: Verbose logging for development
+  # info: Normal operational logging
+  # warn: Important warnings only
+  # error: Error conditions only
   level: "info"
 
 creativity:
   # Enable autonomous creativity mode when idle
+  # When enabled, agent generates improvement suggestions during idle periods
+  # SECURITY NOTE: Creates GitHub issues autonomously - review before enabling
   enabled: true
+  
   # Seconds idle before entering creativity mode
+  # Higher values = less frequent suggestions
+  # Recommended: 120-600 seconds
   idle_threshold_seconds: 120
-  # Cooldown between suggestions (seconds)
+  
+  # Cooldown between suggestion attempts (seconds)
+  # Prevents spam suggestions
+  # Recommended: 300-1800 seconds
   suggestion_cooldown_seconds: 300
-  # Maximum open suggestion issues before pausing
+  
+  # Maximum open suggestion issues before pausing creativity
+  # Prevents overwhelming the issue tracker
+  # Must be > 0 when creativity is enabled
+  # Recommended: 1-5
   max_pending_suggestions: 20
-  # Maximum rejected titles to remember
+  
+  # Maximum rejected suggestion titles to remember (avoids duplicates)
+  # Higher values = better duplicate detection, more memory usage
+  # Recommended: 50-200
   max_rejection_history: 50
 
 decomposition:

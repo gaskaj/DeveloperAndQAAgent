@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -308,14 +309,57 @@ type ConsistencyConfig struct {
 
 // Load reads configuration from the given file path, expanding environment variables.
 func Load(path string) (*Config, error) {
+	return LoadWithOptions(path, false)
+}
+
+// LoadWithOptions loads configuration with optional network validation.
+func LoadWithOptions(path string, skipNetworkValidation bool) (*Config, error) {
 	v := viper.New()
 	v.SetConfigFile(path)
 
+	// Enable strict unmarshaling to catch unknown fields
+	v.SetConfigType("yaml")
+
 	if err := v.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("reading config file: %w", err)
+		return nil, fmt.Errorf("reading config file %q: %w", path, err)
 	}
 
 	// Expand environment variables in all string values.
+	expandedKeys := make(map[string]bool)
+	for _, key := range v.AllKeys() {
+		val := v.GetString(key)
+		if strings.Contains(val, "${") {
+			expanded := os.Expand(val, os.Getenv)
+			v.Set(key, expanded)
+			expandedKeys[key] = true
+		}
+	}
+
+	var cfg Config
+	if err := v.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("unmarshaling config from %q: %w", path, err)
+	}
+
+	// Validate configuration with enhanced validation
+	ctx := context.Background()
+	if err := ValidateWithContext(ctx, &cfg, skipNetworkValidation); err != nil {
+		return nil, fmt.Errorf("validating config from %q: %w", path, err)
+	}
+
+	return &cfg, nil
+}
+
+// LoadWithSchemaValidation loads configuration with strict schema validation to catch typos.
+func LoadWithSchemaValidation(path string) (*Config, error) {
+	v := viper.New()
+	v.SetConfigFile(path)
+	v.SetConfigType("yaml")
+
+	if err := v.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("reading config file %q: %w", path, err)
+	}
+
+	// Expand environment variables
 	for _, key := range v.AllKeys() {
 		val := v.GetString(key)
 		if strings.Contains(val, "${") {
@@ -326,11 +370,17 @@ func Load(path string) (*Config, error) {
 
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
-		return nil, fmt.Errorf("unmarshaling config: %w", err)
+		// Try to provide helpful error messages for common typos
+		if strings.Contains(err.Error(), "cannot unmarshal") {
+			return nil, fmt.Errorf("config parsing error in %q: %w\nHint: Check for typos in field names or incorrect value types", path, err)
+		}
+		return nil, fmt.Errorf("unmarshaling config from %q: %w", path, err)
 	}
 
-	if err := Validate(&cfg); err != nil {
-		return nil, fmt.Errorf("validating config: %w", err)
+	// Validate with full checks including network validation
+	ctx := context.Background()
+	if err := ValidateWithContext(ctx, &cfg, false); err != nil {
+		return nil, fmt.Errorf("validating config from %q: %w", path, err)
 	}
 
 	return &cfg, nil
