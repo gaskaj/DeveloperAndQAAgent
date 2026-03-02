@@ -39,7 +39,7 @@ jobs:
         go-version: ${{ matrix.go-version }}
 
     - name: Cache Go modules
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cache/go-build
@@ -96,7 +96,7 @@ jobs:
           -count=3
 
     - name: Upload coverage reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: coverage-${{ matrix.test-suite.name }}
         path: coverage-${{ matrix.test-suite.name }}.out
@@ -108,7 +108,7 @@ jobs:
 
     - name: Upload test logs
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: test-logs-${{ matrix.test-suite.name }}
         path: test-logs-${{ matrix.test-suite.name }}.txt
@@ -134,7 +134,7 @@ jobs:
         go-version: '1.25'
 
     - name: Cache Go modules
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cache/go-build
@@ -163,7 +163,7 @@ jobs:
         docker-compose -f docker-compose.test.yml logs performance-tests >> performance-report.md
 
     - name: Upload performance report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: performance-report
         path: performance-report.md
@@ -189,7 +189,7 @@ jobs:
         go-version: '1.25'
 
     - name: Download all coverage reports
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         path: coverage-reports/
 
@@ -209,7 +209,7 @@ jobs:
         echo "COVERAGE_PERCENTAGE=$COVERAGE" >> $GITHUB_ENV
 
     - name: Upload coverage report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: coverage-report
         path: |
