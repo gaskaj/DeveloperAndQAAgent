@@ -2,7 +2,8 @@
 
 # Base Go development image
 FROM golang:1.25-alpine AS base
-RUN apk add --no-cache git curl wget bash
+RUN apk add --no-cache git curl wget bash gcc musl-dev
+ENV CGO_ENABLED=1
 WORKDIR /workspace
 
 # Test dependencies stage
