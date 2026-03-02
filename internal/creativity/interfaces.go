@@ -8,6 +8,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/claude"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
+	"github.com/google/go-github/v68/github"
 )
 
 // Issue is a simplified issue representation for the creativity package.
@@ -28,6 +29,8 @@ type Suggestion struct {
 // GitHubClient defines the GitHub operations needed by the creativity engine.
 type GitHubClient interface {
 	ListIssuesByLabel(ctx context.Context, label string) ([]*Issue, error)
+	ListClosedIssuesByLabel(ctx context.Context, label string) ([]*Issue, error)
+	ListAllClosedIssues(ctx context.Context) ([]*Issue, error)
 	CreateIssue(ctx context.Context, title, body string, labels []string) (int, error)
 	AddLabels(ctx context.Context, number int, labels []string) error
 	RemoveLabel(ctx context.Context, number int, label string) error
@@ -48,13 +51,35 @@ func NewGitHubAdapter(client ghub.Client) *GitHubAdapter {
 	return &GitHubAdapter{client: client}
 }
 
-// ListIssuesByLabel returns issues matching a single label.
+// ListIssuesByLabel returns open issues matching a single label.
 func (a *GitHubAdapter) ListIssuesByLabel(ctx context.Context, label string) ([]*Issue, error) {
 	ghIssues, err := a.client.ListIssues(ctx, []string{label})
 	if err != nil {
 		return nil, fmt.Errorf("listing issues by label %q: %w", label, err)
 	}
+	return convertGitHubIssues(ghIssues), nil
+}
 
+// ListClosedIssuesByLabel returns closed issues matching a single label.
+func (a *GitHubAdapter) ListClosedIssuesByLabel(ctx context.Context, label string) ([]*Issue, error) {
+	ghIssues, err := a.client.ListIssuesByState(ctx, []string{label}, "closed")
+	if err != nil {
+		return nil, fmt.Errorf("listing closed issues by label %q: %w", label, err)
+	}
+	return convertGitHubIssues(ghIssues), nil
+}
+
+// ListAllClosedIssues returns all closed issues (no label filter).
+func (a *GitHubAdapter) ListAllClosedIssues(ctx context.Context) ([]*Issue, error) {
+	ghIssues, err := a.client.ListIssuesByState(ctx, nil, "closed")
+	if err != nil {
+		return nil, fmt.Errorf("listing all closed issues: %w", err)
+	}
+	return convertGitHubIssues(ghIssues), nil
+}
+
+// convertGitHubIssues converts go-github issues to creativity Issue types.
+func convertGitHubIssues(ghIssues []*github.Issue) []*Issue {
 	issues := make([]*Issue, 0, len(ghIssues))
 	for _, gi := range ghIssues {
 		issue := &Issue{
@@ -68,7 +93,7 @@ func (a *GitHubAdapter) ListIssuesByLabel(ctx context.Context, label string) ([]
 		}
 		issues = append(issues, issue)
 	}
-	return issues, nil
+	return issues
 }
 
 // CreateIssue creates a new GitHub issue and returns its number.
@@ -106,10 +131,11 @@ func (a *ClaudeAdapter) GenerateSuggestion(ctx context.Context, prompt string) (
 		anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
 	}
 
-	system := "You are a senior software engineer reviewing a project for improvements. " +
+	system := "You are a senior software engineer performing a thorough review of a project to suggest ONE high-impact improvement. " +
+		"You have been given the full project context including codebase structure, documentation, open issues, closed issues, and prior suggestions. " +
 		"Respond with exactly two sections: a TITLE line and a BODY section. " +
 		"The TITLE should be a concise issue title (under 80 characters). " +
-		"The BODY should be a detailed markdown description of the improvement.\n\n" +
+		"The BODY should be a detailed markdown description of the improvement, referencing specific files and packages.\n\n" +
 		"Format:\nTITLE: <issue title>\nBODY:\n<detailed description>"
 
 	msg, err := a.client.SendMessage(ctx, system, messages)

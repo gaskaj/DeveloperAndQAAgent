@@ -4,31 +4,86 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/gitops"
 )
+
+// RepoConfig holds configuration for the creativity engine's repo awareness.
+type RepoConfig struct {
+	URL          string // e.g. https://github.com/owner/repo.git
+	Token        string
+	WorkspaceDir string // base dir for creativity workspace
+}
 
 // CreativityEngine manages autonomous suggestion generation during idle periods.
 type CreativityEngine struct {
 	gh             GitHubClient
 	ai             AIClient
 	cfg            config.CreativityConfig
+	repoCfg        RepoConfig
+	repo           *gitops.Repo
 	rejectionCache *RejectionCache
 	agentID        string
 	logger         *slog.Logger
 }
 
 // NewCreativityEngine creates a new CreativityEngine.
-func NewCreativityEngine(gh GitHubClient, ai AIClient, cfg config.CreativityConfig, agentID string, logger *slog.Logger) *CreativityEngine {
+func NewCreativityEngine(gh GitHubClient, ai AIClient, cfg config.CreativityConfig, repoCfg RepoConfig, agentID string, logger *slog.Logger) *CreativityEngine {
 	return &CreativityEngine{
 		gh:             gh,
 		ai:             ai,
 		cfg:            cfg,
+		repoCfg:        repoCfg,
 		rejectionCache: NewRejectionCache(cfg.MaxRejectionHistory),
 		agentID:        agentID,
 		logger:         logger,
 	}
+}
+
+// ensureRepo clones or opens and pulls the repository for codebase awareness.
+// The cloned repo is cached across loop iterations.
+func (e *CreativityEngine) ensureRepo(ctx context.Context) (*gitops.Repo, error) {
+	dir := filepath.Join(e.repoCfg.WorkspaceDir, "creativity-workspace")
+
+	if e.repo != nil {
+		// Already have a cached repo — pull latest changes.
+		if err := e.repo.Pull(); err != nil {
+			e.logger.Warn("failed to pull repo, re-cloning", "error", err)
+			e.repo = nil
+			// Fall through to re-clone.
+		} else {
+			return e.repo, nil
+		}
+	}
+
+	// Try to open existing clone first.
+	if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+		repo, err := gitops.Open(dir, e.repoCfg.Token)
+		if err == nil {
+			_ = repo.Pull() // best-effort pull
+			e.repo = repo
+			return e.repo, nil
+		}
+		e.logger.Warn("failed to open existing repo, re-cloning", "error", err)
+		_ = os.RemoveAll(dir)
+	}
+
+	// Clone fresh.
+	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+		return nil, fmt.Errorf("creating workspace dir: %w", err)
+	}
+
+	repo, err := gitops.Clone(e.repoCfg.URL, dir, e.repoCfg.Token)
+	if err != nil {
+		return nil, fmt.Errorf("cloning repo for creativity: %w", err)
+	}
+
+	e.repo = repo
+	return e.repo, nil
 }
 
 // Run executes the creativity loop. It checks for available work, generates

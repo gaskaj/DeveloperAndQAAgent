@@ -23,6 +23,9 @@ type mockGitHubClient struct{}
 func (m *mockGitHubClient) ListIssues(_ context.Context, _ []string) ([]*github.Issue, error) {
 	return nil, nil
 }
+func (m *mockGitHubClient) ListIssuesByState(_ context.Context, _ []string, _ string) ([]*github.Issue, error) {
+	return nil, nil
+}
 func (m *mockGitHubClient) GetIssue(_ context.Context, _ int) (*github.Issue, error) {
 	return nil, nil
 }

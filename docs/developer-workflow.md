@@ -134,15 +134,23 @@ See [github-integration.md](github-integration.md) for `PRValidationOptions` def
 
 ## Creativity Mode
 
-When the poller finds no `agent:ready` issues and creativity is enabled, the `IdleHandler` triggers the creativity engine:
+When the poller finds no `agent:ready` issues and creativity is enabled, the `IdleHandler` triggers the creativity engine (`internal/creativity/`):
 
 1. Enters `creative_thinking` state
-2. Gathers project context (open issues, pending suggestions, rejection history)
-3. Claude generates one high-impact improvement suggestion
-4. Deduplicates against existing issues and rejected ideas
-5. Creates a GitHub issue with `agent:suggestion` label
-6. Sleeps for the configured cooldown
-7. Exits when real work appears
+2. Gathers full project context:
+   - **Codebase awareness**: Clones/pulls the repository to read the file tree and key documentation (README.md, CLAUDE.md, docs/*.md)
+   - **Open issues**: Fetches `agent:ready` issues to understand planned work
+   - **Closed issues**: Fetches completed issues to understand what has already been done
+   - **Pending suggestions**: Existing `agent:suggestion` issues to avoid duplicates
+   - **Rejection history**: Previously rejected ideas from `agent:suggestion-rejected` issues
+3. Builds a comprehensive prompt with explicit review instructions telling Claude to review all context sections before suggesting
+4. Claude generates one high-impact improvement suggestion referencing specific files and packages
+5. Deduplicates against existing issues, closed issues, and rejected ideas
+6. Creates a GitHub issue with `agent:suggestion` label
+7. Sleeps for the configured cooldown
+8. Exits when real work appears
+
+The repo clone is cached across creativity loop iterations via `ensureRepo()` — first call clones, subsequent calls pull. If cloning fails, the engine continues with issue-only context (graceful degradation).
 
 See [configuration.md](configuration.md) for creativity settings.
 

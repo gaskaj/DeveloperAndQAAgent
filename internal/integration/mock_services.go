@@ -118,6 +118,10 @@ func (m *MockGitHubClient) ListIssues(ctx context.Context, labels []string) ([]*
 	return m.ListIssuesByLabels(ctx, labels)
 }
 
+func (m *MockGitHubClient) ListIssuesByState(_ context.Context, _ []string, _ string) ([]*github.Issue, error) {
+	return nil, nil
+}
+
 func (m *MockGitHubClient) ListIssuesByLabels(ctx context.Context, labels []string) ([]*github.Issue, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

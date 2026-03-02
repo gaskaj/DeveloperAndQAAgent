@@ -2,6 +2,7 @@ package developer
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -42,10 +43,16 @@ func New(deps agent.Dependencies) (agent.Agent, error) {
 	if deps.Config.Creativity.Enabled {
 		ghAdapter := creativity.NewGitHubAdapter(deps.GitHub)
 		aiAdapter := creativity.NewClaudeAdapter(deps.Claude)
+		repoCfg := creativity.RepoConfig{
+			URL:          fmt.Sprintf("https://github.com/%s/%s.git", deps.Config.GitHub.Owner, deps.Config.GitHub.Repo),
+			Token:        deps.Config.GitHub.Token,
+			WorkspaceDir: deps.Config.Agents.Developer.WorkspaceDir,
+		}
 		engine := creativity.NewCreativityEngine(
 			ghAdapter,
 			aiAdapter,
 			deps.Config.Creativity,
+			repoCfg,
 			string(agent.TypeDeveloper),
 			deps.Logger.With("component", "creativity"),
 		)

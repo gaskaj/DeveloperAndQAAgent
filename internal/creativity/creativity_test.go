@@ -35,6 +35,14 @@ func (m *mockGitHub) ListIssuesByLabel(_ context.Context, label string) ([]*Issu
 	return m.issuesByLabel[label], nil
 }
 
+func (m *mockGitHub) ListClosedIssuesByLabel(_ context.Context, _ string) ([]*Issue, error) {
+	return nil, nil
+}
+
+func (m *mockGitHub) ListAllClosedIssues(_ context.Context) ([]*Issue, error) {
+	return nil, nil
+}
+
 func (m *mockGitHub) CreateIssue(_ context.Context, title, body string, labels []string) (int, error) {
 	if m.createErr != nil {
 		return 0, m.createErr
@@ -80,7 +88,7 @@ func TestCreativityEngine_ExitsWhenWorkAvailable(t *testing.T) {
 	}
 
 	ai := &mockAI{suggestion: &Suggestion{Title: "test", Body: "test"}}
-	engine := NewCreativityEngine(gh, ai, testConfig(), "test-agent", testLogger())
+	engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
 
 	err := engine.Run(context.Background())
 	require.NoError(t, err)
@@ -101,7 +109,7 @@ func TestCreativityEngine_SkipsWhenPendingSuggestionExists(t *testing.T) {
 	}
 
 	ai := &mockAI{suggestion: &Suggestion{Title: "test", Body: "test"}}
-	engine := NewCreativityEngine(counterGH, ai, testConfig(), "test-agent", testLogger())
+	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
 
 	err := engine.Run(context.Background())
 	require.NoError(t, err)
@@ -133,7 +141,7 @@ func TestCreativityEngine_CreatesSuggestionWhenIdle(t *testing.T) {
 		},
 	}
 
-	engine := NewCreativityEngine(counterGH, ai, testConfig(), "test-agent", testLogger())
+	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
 	err := engine.Run(context.Background())
 	require.NoError(t, err)
 
@@ -174,7 +182,7 @@ func TestCreativityEngine_SkipsDuplicateSuggestion(t *testing.T) {
 		},
 	}
 
-	engine := NewCreativityEngine(counterGH, ai, testConfig(), "test-agent", testLogger())
+	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
 	err := engine.Run(context.Background())
 	require.NoError(t, err)
 	assert.Empty(t, gh.createdIssues, "should skip duplicate suggestion")
@@ -212,7 +220,7 @@ func TestCreativityEngine_SkipsRejectedSuggestion(t *testing.T) {
 		},
 	}
 
-	engine := NewCreativityEngine(counterGH, ai, testConfig(), "test-agent", testLogger())
+	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
 	err := engine.Run(context.Background())
 	require.NoError(t, err)
 	assert.Empty(t, gh.createdIssues, "should skip rejected suggestion")
@@ -225,10 +233,77 @@ func TestCreativityEngine_DisabledByConfig(t *testing.T) {
 	gh := newMockGitHub()
 	ai := &mockAI{}
 
-	engine := NewCreativityEngine(gh, ai, cfg, "test-agent", testLogger())
+	engine := NewCreativityEngine(gh, ai, cfg, RepoConfig{}, "test-agent", testLogger())
 	assert.NotNil(t, engine)
 	// When disabled, the engine is simply never called by the poller.
 	// We verify the engine can be constructed even with disabled config.
+}
+
+func TestCreativityEngine_ContextIncludesClosedIssues(t *testing.T) {
+	closedIssues := []*Issue{
+		{Number: 50, Title: "Implemented feature X", State: "closed"},
+		{Number: 51, Title: "Fixed bug Y", State: "closed"},
+	}
+
+	gh := &closedIssueMockGitHub{
+		mockGitHub:   newMockGitHub(),
+		closedIssues: closedIssues,
+	}
+	gh.issuesByLabel[labelSuggestionRejected] = nil
+
+	counterGH := &counterMockGitHubWithClosed{
+		inner:        gh,
+		readyResults: [][]*Issue{nil, nil, {{Number: 99, Title: "Work appeared"}}},
+		suggResults:  [][]*Issue{nil, nil},
+	}
+
+	capturedPrompt := ""
+	ai := &capturingMockAI{
+		suggestion: &Suggestion{
+			Title: "New suggestion",
+			Body:  "Something new.",
+		},
+		capturePrompt: &capturedPrompt,
+	}
+
+	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+	err := engine.Run(context.Background())
+	require.NoError(t, err)
+	assert.Contains(t, capturedPrompt, "Implemented feature X")
+	assert.Contains(t, capturedPrompt, "Fixed bug Y")
+	assert.Contains(t, capturedPrompt, "Closed Issues")
+}
+
+func TestCreativityEngine_RepoCloneFailureGraceful(t *testing.T) {
+	gh := newMockGitHub()
+	gh.issuesByLabel[labelSuggestionRejected] = nil
+
+	counterGH := &counterMockGitHub{
+		inner:        gh,
+		readyResults: [][]*Issue{nil, nil, {{Number: 99, Title: "Work appeared"}}},
+		suggResults:  [][]*Issue{nil, nil},
+	}
+
+	ai := &mockAI{
+		suggestion: &Suggestion{
+			Title: "Improvement without repo context",
+			Body:  "This suggestion was made without codebase awareness.",
+		},
+	}
+
+	// Use an invalid repo URL to trigger clone failure.
+	repoCfg := RepoConfig{
+		URL:          "https://invalid.example.com/nonexistent.git",
+		Token:        "fake-token",
+		WorkspaceDir: t.TempDir(),
+	}
+	engine := NewCreativityEngine(counterGH, ai, testConfig(), repoCfg, "test-agent", testLogger())
+
+	err := engine.Run(context.Background())
+	require.NoError(t, err)
+	// Engine should still create the suggestion despite repo clone failure.
+	require.Len(t, gh.createdIssues, 1)
+	assert.Equal(t, "Improvement without repo context", gh.createdIssues[0].title)
 }
 
 func TestCreativityEngine_AIError(t *testing.T) {
@@ -252,7 +327,7 @@ func TestCreativityEngine_AIError(t *testing.T) {
 	}
 
 	ai := &mockAI{err: fmt.Errorf("API error")}
-	engine := NewCreativityEngine(counterGH, ai, testConfig(), "test-agent", testLogger())
+	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
 
 	err := engine.Run(context.Background())
 	require.NoError(t, err)
@@ -266,6 +341,14 @@ type counterMockGitHub struct {
 	suggCallNum  int
 	readyResults [][]*Issue
 	suggResults  [][]*Issue
+}
+
+func (c *counterMockGitHub) ListClosedIssuesByLabel(_ context.Context, _ string) ([]*Issue, error) {
+	return nil, nil
+}
+
+func (c *counterMockGitHub) ListAllClosedIssues(_ context.Context) ([]*Issue, error) {
+	return nil, nil
 }
 
 func (c *counterMockGitHub) ListIssuesByLabel(_ context.Context, label string) ([]*Issue, error) {
@@ -301,4 +384,81 @@ func (c *counterMockGitHub) AddLabels(ctx context.Context, number int, labels []
 
 func (c *counterMockGitHub) RemoveLabel(ctx context.Context, number int, label string) error {
 	return c.inner.RemoveLabel(ctx, number, label)
+}
+
+// closedIssueMockGitHub extends mockGitHub with closed issues support.
+type closedIssueMockGitHub struct {
+	*mockGitHub
+	closedIssues []*Issue
+}
+
+func (m *closedIssueMockGitHub) ListClosedIssuesByLabel(_ context.Context, _ string) ([]*Issue, error) {
+	return m.closedIssues, nil
+}
+
+func (m *closedIssueMockGitHub) ListAllClosedIssues(_ context.Context) ([]*Issue, error) {
+	return m.closedIssues, nil
+}
+
+// counterMockGitHubWithClosed wraps closedIssueMockGitHub with counter semantics.
+type counterMockGitHubWithClosed struct {
+	inner        *closedIssueMockGitHub
+	readyCallNum int
+	suggCallNum  int
+	readyResults [][]*Issue
+	suggResults  [][]*Issue
+}
+
+func (c *counterMockGitHubWithClosed) ListIssuesByLabel(_ context.Context, label string) ([]*Issue, error) {
+	switch label {
+	case labelReady:
+		idx := c.readyCallNum
+		c.readyCallNum++
+		if idx < len(c.readyResults) {
+			return c.readyResults[idx], nil
+		}
+		return nil, nil
+	case labelSuggestion:
+		idx := c.suggCallNum
+		c.suggCallNum++
+		if idx < len(c.suggResults) {
+			return c.suggResults[idx], nil
+		}
+		return nil, nil
+	case labelSuggestionRejected:
+		return c.inner.issuesByLabel[labelSuggestionRejected], nil
+	default:
+		return nil, nil
+	}
+}
+
+func (c *counterMockGitHubWithClosed) ListClosedIssuesByLabel(ctx context.Context, label string) ([]*Issue, error) {
+	return c.inner.ListClosedIssuesByLabel(ctx, label)
+}
+
+func (c *counterMockGitHubWithClosed) ListAllClosedIssues(ctx context.Context) ([]*Issue, error) {
+	return c.inner.ListAllClosedIssues(ctx)
+}
+
+func (c *counterMockGitHubWithClosed) CreateIssue(ctx context.Context, title, body string, labels []string) (int, error) {
+	return c.inner.CreateIssue(ctx, title, body, labels)
+}
+
+func (c *counterMockGitHubWithClosed) AddLabels(ctx context.Context, number int, labels []string) error {
+	return c.inner.AddLabels(ctx, number, labels)
+}
+
+func (c *counterMockGitHubWithClosed) RemoveLabel(ctx context.Context, number int, label string) error {
+	return c.inner.RemoveLabel(ctx, number, label)
+}
+
+// capturingMockAI captures the prompt passed to GenerateSuggestion.
+type capturingMockAI struct {
+	suggestion    *Suggestion
+	capturePrompt *string
+}
+
+func (m *capturingMockAI) GenerateSuggestion(_ context.Context, prompt string) (*Suggestion, error) {
+	*m.capturePrompt = prompt
+	return m.suggestion, nil
 }

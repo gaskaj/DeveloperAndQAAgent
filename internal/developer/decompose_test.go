@@ -269,6 +269,9 @@ func newTrackingMock() *trackingMockGitHub {
 func (m *trackingMockGitHub) ListIssues(_ context.Context, _ []string) ([]*github.Issue, error) {
 	return nil, nil
 }
+func (m *trackingMockGitHub) ListIssuesByState(_ context.Context, _ []string, _ string) ([]*github.Issue, error) {
+	return nil, nil
+}
 
 func (m *trackingMockGitHub) GetIssue(_ context.Context, number int) (*github.Issue, error) {
 	if m.failProcessNums[number] {

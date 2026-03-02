@@ -11,6 +11,7 @@ import (
 type Client interface {
 	// Issues
 	ListIssues(ctx context.Context, labels []string) ([]*github.Issue, error)
+	ListIssuesByState(ctx context.Context, labels []string, state string) ([]*github.Issue, error)
 	GetIssue(ctx context.Context, number int) (*github.Issue, error)
 	AssignIssue(ctx context.Context, number int, assignees []string) error
 	AssignSelfIfNoAssignees(ctx context.Context, number int) error

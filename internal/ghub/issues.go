@@ -10,20 +10,25 @@ import (
 
 // ListIssues returns open issues matching the given labels.
 func (c *GitHubClient) ListIssues(ctx context.Context, labels []string) ([]*github.Issue, error) {
+	return c.ListIssuesByState(ctx, labels, "open")
+}
+
+// ListIssuesByState returns issues matching the given labels and state (e.g. "open", "closed", "all").
+func (c *GitHubClient) ListIssuesByState(ctx context.Context, labels []string, state string) ([]*github.Issue, error) {
 	if c.errorManager != nil {
 		retryer := c.errorManager.GetRetryer("github_api")
 		return agentErrors.Execute(ctx, retryer, func(ctx context.Context, attempt int) ([]*github.Issue, error) {
-			return c.listIssuesCore(ctx, labels)
+			return c.listIssuesCore(ctx, labels, state)
 		})
 	}
-	
-	return c.listIssuesCore(ctx, labels)
+
+	return c.listIssuesCore(ctx, labels, state)
 }
 
 // listIssuesCore contains the core listing logic
-func (c *GitHubClient) listIssuesCore(ctx context.Context, labels []string) ([]*github.Issue, error) {
+func (c *GitHubClient) listIssuesCore(ctx context.Context, labels []string, issueState string) ([]*github.Issue, error) {
 	opts := &github.IssueListByRepoOptions{
-		State:  "open",
+		State:  issueState,
 		Labels: labels,
 		ListOptions: github.ListOptions{
 			PerPage: 50,
