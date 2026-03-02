@@ -64,6 +64,14 @@ decomposition:
   # Maximum number of subtasks when decomposing an issue.
   max_subtasks: 5
 
+shutdown:
+  # Maximum time to wait for graceful shutdown before force kill
+  timeout: "30s"
+  # Whether to clean up workspace directories on shutdown
+  cleanup_workspaces: true
+  # Whether to reset agent:claimed labels to agent:ready on startup recovery
+  reset_claims: true
+
 error_handling:
   retry:
     # Enable retry mechanisms across agent communications

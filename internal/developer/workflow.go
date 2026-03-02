@@ -47,9 +47,18 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 
 	d.logger().Info("processing issue", "number", issueNum, "title", issueTitle)
 
+	// Create checkpoint manager for this workflow
+	checkpointer := NewCheckpointManager(d.Deps.Store, d.logger())
+
 	// Step 1: Claim — also removes agent:ready to prevent re-processing on restart.
 	ctx = observability.WithWorkflowStage(ctx, observability.WorkflowStageClaim)
 	d.updateStatus(state.StateClaim, issueNum, "claiming issue")
+	
+	// Check for context cancellation before proceeding
+	if ctx.Err() != nil {
+		d.logger().Info("context cancelled before claiming issue", "issue", issueNum)
+		return ctx.Err()
+	}
 	
 	// Log workflow transition
 	if d.Deps.StructuredLogger != nil {
@@ -73,9 +82,23 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 		d.logger().Error("failed to save state", "error", err)
 	}
 
+	// Create initial checkpoint
+	if err := checkpointer.CreateCheckpoint(ctx, ws, "claim", map[string]interface{}{
+		"issue_title": issueTitle,
+		"action":      "claimed_issue",
+	}); err != nil {
+		d.logger().Error("failed to create claim checkpoint", "error", err)
+	}
+
 	// Step 2: Setup workspace — moved before analyze so Claude has real codebase context.
 	ctx = observability.WithWorkflowStage(ctx, observability.WorkflowStage("workspace"))
 	d.updateStatus(state.StateWorkspace, issueNum, "setting up workspace")
+	
+	// Check for context cancellation before workspace setup
+	if ctx.Err() != nil {
+		d.logger().Info("context cancelled during workspace setup", "issue", issueNum)
+		return d.handleGracefulShutdown(ctx, ws, "workspace_setup")
+	}
 	
 	// Log workflow transition
 	if d.Deps.StructuredLogger != nil {
@@ -102,6 +125,15 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 	if err := repo.CheckoutBranch(branchName, true); err != nil {
 		d.failIssue(ctx, ws, fmt.Errorf("creating branch: %w", err))
 		return err
+	}
+
+	// Create workspace checkpoint
+	if err := checkpointer.CreateCheckpoint(ctx, ws, "workspace", map[string]interface{}{
+		"workspace_dir": workDir,
+		"branch_name":   branchName,
+		"repo_url":      repoURL,
+	}); err != nil {
+		d.logger().Error("failed to create workspace checkpoint", "error", err)
 	}
 
 	// Gather codebase context for Claude.
@@ -335,6 +367,63 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 
 	d.updateStatus(state.StateIdle, 0, "waiting for issues")
 
+	return nil
+}
+
+// handleGracefulShutdown handles graceful shutdown during workflow processing
+func (d *DeveloperAgent) handleGracefulShutdown(ctx context.Context, ws *state.AgentWorkState, stage string) error {
+	d.logger().Info("handling graceful shutdown", "issue", ws.IssueNumber, "stage", stage)
+	
+	// Create checkpoint for interrupted work
+	checkpointer := NewCheckpointManager(d.Deps.Store, d.logger())
+	if err := checkpointer.CreateCheckpoint(ctx, ws, stage, map[string]interface{}{
+		"interrupted_by": "graceful_shutdown",
+		"interrupted_at": time.Now(),
+		"stage":          stage,
+	}); err != nil {
+		d.logger().Error("failed to create shutdown checkpoint", "error", err)
+	}
+	
+	// Reset issue to ready state if we haven't made significant progress
+	if shouldResetOnShutdown(ws.State) {
+		if err := d.resetIssueToReady(ctx, ws.IssueNumber); err != nil {
+			d.logger().Error("failed to reset issue to ready", "issue", ws.IssueNumber, "error", err)
+		}
+	}
+	
+	// Log workflow transition
+	if d.Deps.StructuredLogger != nil {
+		d.Deps.StructuredLogger.LogWorkflowTransition(ctx, ws.IssueNumber, ws.State, "interrupted", "graceful_shutdown")
+	}
+	
+	return ctx.Err()
+}
+
+// shouldResetOnShutdown determines if an issue should be reset to ready state on shutdown
+func shouldResetOnShutdown(currentState state.State) bool {
+	switch currentState {
+	case state.StateClaim, state.StateWorkspace, state.StateAnalyze:
+		return true // Early states - safe to reset
+	case state.StateImplement:
+		return true // Implementation can be restarted
+	default:
+		return false // Later states - leave as-is
+	}
+}
+
+// resetIssueToReady resets an issue back to ready state
+func (d *DeveloperAgent) resetIssueToReady(ctx context.Context, issueNum int) error {
+	d.logger().Info("resetting issue to ready state", "issue", issueNum)
+	
+	// Remove agent:claimed and agent:in-progress labels
+	_ = d.Deps.GitHub.RemoveLabel(ctx, issueNum, "agent:claimed")
+	_ = d.Deps.GitHub.RemoveLabel(ctx, issueNum, "agent:in-progress")
+	
+	// Add agent:ready label
+	if err := d.Deps.GitHub.AddLabels(ctx, issueNum, []string{"agent:ready"}); err != nil {
+		return fmt.Errorf("adding ready label: %w", err)
+	}
+	
 	return nil
 }
 

@@ -33,6 +33,7 @@ func (o *Orchestrator) WithObservability(structuredLogger *observability.Structu
 }
 
 // Run starts all agents concurrently and blocks until they all stop or the context is cancelled.
+// The context cancellation triggers graceful shutdown of all agents.
 func (o *Orchestrator) Run(ctx context.Context) error {
 	// Create enriched correlation context for orchestrator operations
 	ctx = observability.EnsureCorrelationContext(ctx, "orchestrator", 0)
@@ -65,6 +66,22 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			agentCtx = observability.WithWorkflowStage(agentCtx, observability.WorkflowStageStart)
 			
 			if err := a.Run(agentCtx); err != nil {
+				// Check if this is a graceful shutdown (context cancelled)
+				if agentCtx.Err() != nil {
+					o.logger.Info("agent stopped due to context cancellation", "type", agentType)
+					
+					// Log graceful shutdown
+					if o.structuredLogger != nil {
+						o.structuredLogger.LogWorkflowTransition(agentCtx, 0, "running", "stopped", "graceful_shutdown")
+						o.structuredLogger.LogAgentHandoff(agentCtx, agentType, "orchestrator", "graceful_shutdown", 0)
+					}
+					if o.metrics != nil {
+						o.metrics.RecordWorkflowTransition(agentCtx, "running", "stopped")
+					}
+					
+					return nil // Context cancellation is not an error
+				}
+				
 				o.logger.Error("agent stopped with error",
 					"type", agentType,
 					"error", err,

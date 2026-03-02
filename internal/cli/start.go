@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/agent"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/claude"
@@ -90,16 +91,66 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no agents enabled in configuration")
 	}
 
-	// Setup signal handling.
+	// Setup signal handling with graceful shutdown.
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	// Initialize recovery manager to handle interrupted workflows
+	recoveryManager := state.NewRecoveryManager(store, ghClient, cfg, logger).
+		WithObservability(structuredLogger)
+
+	// Perform recovery before starting agents
+	if err := recoveryManager.RecoverInterruptedWorkflows(ctx); err != nil {
+		logger.Error("recovery failed, continuing anyway", "error", err)
+	}
+
 	logger.Info("agents starting", "count", len(agents))
 
-	// Run orchestrator.
+	// Run orchestrator with graceful shutdown support.
 	orch := orchestrator.New(agents, logger).WithObservability(structuredLogger, metrics)
-	if err := orch.Run(ctx); err != nil && ctx.Err() == nil {
-		return fmt.Errorf("orchestrator error: %w", err)
+	shutdownManager := orchestrator.NewShutdownManager(agents, store, cfg, logger).
+		WithObservability(structuredLogger)
+
+	// Start orchestrator in a goroutine
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- orch.Run(ctx)
+	}()
+
+	// Wait for either completion or signal
+	select {
+	case err := <-errCh:
+		// Orchestrator completed normally
+		if err != nil && ctx.Err() == nil {
+			return fmt.Errorf("orchestrator error: %w", err)
+		}
+	case <-ctx.Done():
+		// Signal received, perform graceful shutdown
+		logger.Info("shutdown signal received, initiating graceful shutdown")
+		
+		// Start force shutdown timer
+		forceCtx, forceCancel := context.WithTimeout(context.Background(), cfg.Shutdown.Timeout+10*time.Second)
+		defer forceCancel()
+		
+		go func() {
+			<-forceCtx.Done()
+			if forceCtx.Err() == context.DeadlineExceeded {
+				shutdownManager.ForceShutdown("shutdown timeout exceeded")
+			}
+		}()
+		
+		// Perform graceful shutdown
+		if err := shutdownManager.Shutdown(context.Background()); err != nil {
+			logger.Error("graceful shutdown failed", "error", err)
+		}
+		
+		// Wait for orchestrator to finish
+		select {
+		case <-errCh:
+			// Orchestrator finished
+		case <-time.After(5 * time.Second):
+			logger.Warn("orchestrator did not finish within timeout")
+		}
 	}
 
 	logger.Info("agentctl stopped")

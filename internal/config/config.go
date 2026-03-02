@@ -21,6 +21,7 @@ type Config struct {
 	Creativity    CreativityConfig    `mapstructure:"creativity"`
 	Decomposition DecompositionConfig `mapstructure:"decomposition"`
 	ErrorHandling ErrorHandlingConfig `mapstructure:"error_handling"`
+	Shutdown      ShutdownConfig      `mapstructure:"shutdown"`
 }
 
 // GitHubConfig holds GitHub-related configuration.
@@ -211,6 +212,13 @@ type DecompositionConfig struct {
 	Enabled            bool `mapstructure:"enabled"`
 	MaxIterationBudget int  `mapstructure:"max_iteration_budget"`
 	MaxSubtasks        int  `mapstructure:"max_subtasks"`
+}
+
+// ShutdownConfig holds configuration for graceful shutdown behavior.
+type ShutdownConfig struct {
+	Timeout           time.Duration `mapstructure:"timeout"`
+	CleanupWorkspaces bool          `mapstructure:"cleanup_workspaces"`
+	ResetClaims       bool          `mapstructure:"reset_claims"`
 }
 
 // ErrorHandlingConfig holds configuration for error handling and retry mechanisms.

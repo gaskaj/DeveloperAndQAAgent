@@ -33,9 +33,12 @@ func NewPoller(client Client, labels []string, interval time.Duration, handler E
 }
 
 // Run starts the polling loop. It blocks until the context is cancelled.
+// Respects context cancellation for graceful shutdown.
 func (p *Poller) Run(ctx context.Context) error {
 	ticker := time.NewTicker(p.interval)
 	defer ticker.Stop()
+
+	p.logger.Info("starting GitHub poller", "interval", p.interval, "labels", p.labels)
 
 	// Do an initial poll immediately.
 	if err := p.poll(ctx); err != nil {
@@ -45,8 +48,15 @@ func (p *Poller) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			p.logger.Info("poller stopped due to context cancellation")
+			return nil // Context cancellation is not an error
 		case <-ticker.C:
+			// Check context before polling
+			if ctx.Err() != nil {
+				p.logger.Info("context cancelled during poll cycle")
+				return nil
+			}
+			
 			if err := p.poll(ctx); err != nil {
 				p.logger.Error("poll failed", "error", err)
 			}
