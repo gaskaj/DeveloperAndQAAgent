@@ -68,10 +68,10 @@ func buildPrompt(projectCtx *ProjectContext) string {
 	b.WriteString("Review all documentation and code in the repository to understand the project before suggesting an improvement.\n")
 	b.WriteString("Do NOT duplicate any existing issue or previously rejected idea.\n")
 	b.WriteString("Focus on: code quality, performance, security, testing, documentation, or developer experience.\n")
-	b.WriteString("Be concrete and actionable — include specific files, patterns, or areas to address.\n\n")
 	b.WriteString("Always ensure documentation is up-to-date and comprehensive with the changes. Update and create the relevant documentation files in the repository.\n")
 	b.WriteString("Every issue should be actionable and have a clear impact on the project.\n")
 	b.WriteString("Every issue should be documented in the ./docs directory of the repository.\n")
+	b.WriteString("Be concrete and actionable — include specific files, patterns, or areas to address.\n\n")
 	b.WriteString("Respond with:\nTITLE: <concise issue title>\nBODY:\n<detailed markdown description>\n")
 
 	return b.String()

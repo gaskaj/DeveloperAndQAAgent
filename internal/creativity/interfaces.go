@@ -3,6 +3,7 @@ package creativity
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/claude"
@@ -121,21 +122,27 @@ func (a *ClaudeAdapter) GenerateSuggestion(ctx context.Context, prompt string) (
 }
 
 // parseSuggestion extracts title and body from the Claude response.
+// It handles case variations (TITLE/Title/title) and markdown formatting
+// (**TITLE:**, ## TITLE:, etc.) that Claude may produce.
 func parseSuggestion(text string) (*Suggestion, error) {
-	const titlePrefix = "TITLE: "
-	const bodyPrefix = "BODY:"
+	normalized := normalizeResponse(text)
+	lower := strings.ToLower(normalized)
 
-	titleIdx := indexOf(text, titlePrefix)
-	bodyIdx := indexOf(text, bodyPrefix)
+	titleIdx := strings.Index(lower, "title:")
+	bodyIdx := strings.Index(lower, "body:")
 
 	if titleIdx == -1 || bodyIdx == -1 {
 		return nil, fmt.Errorf("unexpected response format: missing TITLE or BODY section")
 	}
 
-	title := text[titleIdx+len(titlePrefix) : bodyIdx]
+	// Extract content after "title:" marker from the normalized text
+	titleStart := titleIdx + len("title:")
+	title := normalized[titleStart:bodyIdx]
 	title = trimSpace(title)
 
-	body := text[bodyIdx+len(bodyPrefix):]
+	// Extract content after "body:" marker from the normalized text
+	bodyStart := bodyIdx + len("body:")
+	body := normalized[bodyStart:]
 	body = trimSpace(body)
 
 	if title == "" || body == "" {
@@ -145,14 +152,22 @@ func parseSuggestion(text string) (*Suggestion, error) {
 	return &Suggestion{Title: title, Body: body}, nil
 }
 
-// indexOf returns the index of substr in s, or -1 if not found.
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
+// normalizeResponse strips markdown formatting (**, ##, #) from lines
+// containing TITLE or BODY markers so that the markers can be found
+// with a simple case-insensitive search.
+func normalizeResponse(text string) string {
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		lower := strings.ToLower(line)
+		if strings.Contains(lower, "title:") || strings.Contains(lower, "body:") {
+			// Strip leading # and ## markdown headers
+			stripped := strings.TrimLeft(line, "# ")
+			// Strip bold markdown markers
+			stripped = strings.ReplaceAll(stripped, "**", "")
+			lines[i] = stripped
 		}
 	}
-	return -1
+	return strings.Join(lines, "\n")
 }
 
 // trimSpace trims whitespace and newlines from a string.
