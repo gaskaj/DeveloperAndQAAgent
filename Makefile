@@ -48,20 +48,20 @@ test-integration-cover:
 # Docker-based integration tests
 docker-test:
 	@echo "Running integration tests in Docker..."
-	docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit test-runner
-	docker-compose -f docker-compose.test.yml down -v
+	docker compose -f docker-compose.test.yml up --build --abort-on-container-exit test-runner
+	docker compose -f docker-compose.test.yml down -v
 
 # Docker-based performance tests  
 docker-test-performance:
 	@echo "Running performance integration tests in Docker..."
-	docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit performance-tests
-	docker-compose -f docker-compose.test.yml down -v
+	docker compose -f docker-compose.test.yml up --build --abort-on-container-exit performance-tests
+	docker compose -f docker-compose.test.yml down -v
 
 # Docker-based race condition tests
 docker-test-race:
 	@echo "Running race condition tests in Docker..."
-	docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit race-tests
-	docker-compose -f docker-compose.test.yml down -v
+	docker compose -f docker-compose.test.yml up --build --abort-on-container-exit race-tests
+	docker compose -f docker-compose.test.yml down -v
 
 # Run all docker test suites
 docker-test-all: docker-test docker-test-performance docker-test-race
@@ -82,7 +82,7 @@ run: build
 clean:
 	rm -rf bin/ coverage.out coverage.html integration-coverage.out integration-coverage.html
 	rm -rf /tmp/test-workspaces /tmp/test-state /tmp/race-workspaces /tmp/race-state /tmp/perf-workspaces /tmp/perf-state
-	docker-compose -f docker-compose.test.yml down -v --remove-orphans || true
+	docker compose -f docker-compose.test.yml down -v --remove-orphans || true
 
 # Help target
 help:

@@ -66,7 +66,7 @@ jobs:
 
     - name: Start test services
       run: |
-        docker-compose -f docker-compose.test.yml up -d mock-github-api mock-claude-api test-state-store
+        docker compose -f docker-compose.test.yml up -d mock-github-api mock-claude-api test-state-store
         sleep 10  # Wait for services to be ready
 
     - name: Wait for services to be healthy
@@ -104,7 +104,7 @@ jobs:
     - name: Collect test logs
       if: always()
       run: |
-        docker-compose -f docker-compose.test.yml logs > test-logs-${{ matrix.test-suite.name }}.txt
+        docker compose -f docker-compose.test.yml logs > test-logs-${{ matrix.test-suite.name }}.txt
 
     - name: Upload test logs
       if: always()
@@ -116,7 +116,7 @@ jobs:
     - name: Clean up test services
       if: always()
       run: |
-        docker-compose -f docker-compose.test.yml down -v
+        docker compose -f docker-compose.test.yml down -v
 
   performance-tests:
     name: Performance Integration Tests
@@ -146,7 +146,7 @@ jobs:
 
     - name: Start test services
       run: |
-        docker-compose -f docker-compose.test.yml up -d mock-github-api mock-claude-api test-state-store
+        docker compose -f docker-compose.test.yml up -d mock-github-api mock-claude-api test-state-store
 
     - name: Run performance tests
       env:
@@ -154,13 +154,13 @@ jobs:
         TEST_WORKSPACE_DIR: /tmp/perf-workspaces
         TEST_STATE_DIR: /tmp/perf-state
       run: |
-        docker-compose -f docker-compose.test.yml run --rm performance-tests
+        docker compose -f docker-compose.test.yml run --rm performance-tests
 
     - name: Generate performance report
       run: |
         echo "## Performance Test Results" > performance-report.md
         echo "Test completed on $(date)" >> performance-report.md
-        docker-compose -f docker-compose.test.yml logs performance-tests >> performance-report.md
+        docker compose -f docker-compose.test.yml logs performance-tests >> performance-report.md
 
     - name: Upload performance report
       uses: actions/upload-artifact@v4
@@ -171,7 +171,7 @@ jobs:
     - name: Clean up
       if: always()
       run: |
-        docker-compose -f docker-compose.test.yml down -v
+        docker compose -f docker-compose.test.yml down -v
 
   coverage-report:
     name: Generate Coverage Report
