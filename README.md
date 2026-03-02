@@ -6,6 +6,20 @@ An autonomous development agent framework that uses **GitHub as its source of tr
 
 DeveloperAndQAAgent provides agent personas — Developer, QA, and Development Manager — that monitor GitHub issues, write code, create pull requests, run tests, and coordinate via GitHub labels and comments.
 
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [CLAUDE.md](CLAUDE.md) | LLM-first project orientation |
+| [docs/architecture.md](docs/architecture.md) | System design, packages, data flow |
+| [docs/developer-workflow.md](docs/developer-workflow.md) | State machine, decomposition, creativity |
+| [docs/claude-integration.md](docs/claude-integration.md) | Claude client, tools, prompts, SDK patterns |
+| [docs/github-integration.md](docs/github-integration.md) | GitHub client, poller, labels, PRs |
+| [docs/configuration.md](docs/configuration.md) | Full YAML reference, env vars, defaults |
+| [docs/code-conventions.md](docs/code-conventions.md) | Go patterns, testing, git conventions |
+| [docs/package-reference.md](docs/package-reference.md) | Per-package API catalog |
+| [docs/structured-logging.md](docs/structured-logging.md) | Observability, correlation IDs, metrics |
+
 ## Architecture
 
 ```
@@ -20,6 +34,8 @@ internal/
   state/                 Persistent agent work state
   developer/             Developer agent implementation
   creativity/            Autonomous suggestion engine (idle mode)
+  errors/                Retry, circuit breakers, error classification
+  observability/         Structured logging, correlation IDs, metrics
   orchestrator/          Agent pool + health checks
 ```
 
@@ -27,63 +43,17 @@ internal/
 
 Agents coordinate entirely through GitHub:
 - **Issues** are the work queue
-- **Labels** signal state (`agent:claimed`, `agent:in-progress`, `agent:review`, `agent:suggestion`, `agent:suggestion-rejected`)
+- **Labels** signal state (`agent:ready`, `agent:claimed`, `agent:in-progress`, `agent:in-review`, `agent:suggestion`)
 - **Assignments** track ownership
 - **Comments** enable human-in-the-loop feedback
 
-### Developer Agent State Machine
+### Developer Agent Workflow
 
 ```
-idle → claim → analyze → workspace → implement → commit → PR → review → complete
- ↓
-creative_thinking (when idle and creativity enabled)
+idle → claim → workspace → analyze → [decompose] → implement → commit → PR → review → complete
 ```
 
-### Hyper Focused Creativity
-
-When the developer agent has no assigned work and no `agent:ready` issues exist, it can enter **creativity mode** — an autonomous research and suggestion engine that keeps agents productive during idle periods while maintaining human control.
-
-#### How It Works
-
-1. The poller detects no available issues and triggers the idle handler
-2. The creativity engine enters the `creative_thinking` state
-3. It gathers project context (open issues, pending suggestions, rejected ideas)
-4. Claude generates a single high-impact improvement suggestion
-5. The suggestion is deduplicated against existing issues and previously rejected ideas
-6. A new GitHub issue is created with the `agent:suggestion` label
-7. The engine sleeps for the configured cooldown, then repeats
-8. When real work appears (`agent:ready` issues), the engine exits and the agent resumes normal operation
-
-#### Labels
-
-| Label | Purpose |
-|-------|---------|
-| `agent:suggestion` | Open suggestion awaiting human review |
-| `agent:suggestion-rejected` | Closed suggestion that was rejected (remembered to avoid re-suggesting) |
-
-#### Human Workflow
-
-- **Approve**: Remove `agent:suggestion`, add `agent:ready` — the agent picks it up as normal work
-- **Reject**: Close the issue and add `agent:suggestion-rejected` — the agent remembers and won't suggest it again
-
-#### Safeguards
-
-- **Disabled by default** — must be explicitly enabled in config
-- **Max pending suggestions** — pauses when the configured limit of open suggestions is reached (default: 1)
-- **Cooldown** — configurable delay between suggestions (default: 300s)
-- **Rejection memory** — maintains a FIFO cache of rejected titles with substring matching to avoid re-suggesting similar ideas (default: 50 entries)
-- **Duplicate detection** — checks against open issues, pending suggestions, and rejection cache before creating
-
-#### Configuration
-
-```yaml
-creativity:
-  enabled: false                      # Must be explicitly enabled
-  idle_threshold_seconds: 120         # Seconds idle before entering creativity mode
-  suggestion_cooldown_seconds: 300    # Cooldown between suggestions
-  max_pending_suggestions: 1          # Max open suggestion issues before pausing
-  max_rejection_history: 50           # Max rejected titles to remember
-```
+When idle and creativity is enabled, the agent enters `creative_thinking` mode — generating improvement suggestions as GitHub issues. Complex issues are automatically decomposed into subtasks. See [docs/developer-workflow.md](docs/developer-workflow.md) for details.
 
 ## Setup
 
@@ -99,6 +69,8 @@ creativity:
 cp configs/config.example.yaml configs/config.yaml
 # Edit configs/config.yaml with your tokens and repo details
 ```
+
+See [docs/configuration.md](docs/configuration.md) for the full YAML reference.
 
 ### Build & Run
 

@@ -1,8 +1,31 @@
-# Structured Logging with Correlation IDs - Implementation Guide
+# Structured Logging with Correlation IDs
 
 ## Overview
 
-This implementation enhances the multi-agent system with comprehensive structured logging and correlation ID tracking, enabling full traceability across the Developer → QA → Human feedback loop.
+This document covers the structured logging and observability framework built into the agent system. It enables full traceability across the Developer → QA → Human feedback loop using correlation IDs, workflow tracking, and agent handoff chains.
+
+For configuration options, see [configuration.md](configuration.md) (the `logging`, `metrics`, and `observability` sections). For the `observability` package API, see [package-reference.md](package-reference.md).
+
+## Observability Package
+
+**Location**: `internal/observability/`
+
+The `observability` package provides three core components:
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| `CorrelationContext` | `correlation.go` | Context-based correlation ID propagation with workflow stages, handoff chains, and metadata |
+| `StructuredLogger` | `logger.go` | Structured event logging (agent lifecycle, workflow transitions, handoffs, decisions, LLM calls) |
+| `Metrics` | `metrics.go` | Performance metrics collection (LLM call durations, token counts, workflow timing) |
+
+### Key Functions
+
+| Function | Description |
+|----------|-------------|
+| `EnsureCorrelationContext(ctx, agentType, issueID)` | Create or reuse correlation context |
+| `WithWorkflowStage(ctx, stage)` | Set the current workflow stage |
+| `WithHandoff(ctx, from, to, trigger, payloadSize)` | Record an agent handoff |
+| `WithMetadata(ctx, key, value)` | Add metadata to correlation context |
 
 ## Key Features
 
@@ -25,11 +48,37 @@ type CorrelationContext struct {
 
 ### 2. Workflow Stage Tracking
 
-All workflow stages are tracked with timing information:
+All 12 workflow stages are tracked with timing information:
 
 ```
-start → claim → analyze → implement → commit → pr → review → complete
+start → claim → analyze → decompose → implement → commit → pr → review → complete
+                                                                          ↓
+idle ←──────────────────────────────────────────────────────────────── handoff
+                                                                          ↓
+                                                                       error
 ```
+
+**WorkflowStage constants** (from `correlation.go`): `Start`, `Claim`, `Analyze`, `Decompose`, `Implement`, `Commit`, `PR`, `Review`, `Complete`, `Handoff`, `Idle`, `Error`
+
+### Additional Logger Methods (PRs #77, #79, #83)
+
+Beyond the core logging methods, `StructuredLogger` also provides:
+
+| Method | Purpose |
+|--------|---------|
+| `LogToolUsage(ctx, tool, duration, success)` | Track tool execution with timing |
+| `LogPerformanceMetric(ctx, name, value, unit, labels)` | Arbitrary performance metrics |
+| `LogRetryAttempt(ctx, operation, attempt, max, err)` | Retry attempt tracking |
+| `LogRetrySuccess(ctx, operation, attempt)` | Successful retry |
+| `LogRetryExhausted(ctx, operation, attempts, err)` | All retries exhausted |
+| `LogRetryNonRetryable(ctx, operation, attempt, err)` | Non-retryable error encountered |
+| `LogRetryDelay(ctx, operation, attempt, delay, err)` | Delay before next retry |
+| `LogCircuitBreakerStateChange(ctx, name, from, to)` | Circuit breaker state transition |
+| `LogCircuitBreakerRejection(ctx, name, state)` | Request rejected by circuit breaker |
+
+### Correlation ID Format
+
+Correlation IDs are generated as 16-character hex strings (8 random bytes). Falls back to `"unknown"` if random generation fails.
 
 ### 3. Agent Handoff Traceability
 
