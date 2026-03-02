@@ -20,6 +20,8 @@ type DeveloperAgent struct {
 	poller           *ghub.Poller
 	status           agent.StatusReport
 	workspaceManager workspace.Manager
+	validator        *state.StateValidator
+	recoveryManager  *RecoveryManager
 }
 
 // New creates a new DeveloperAgent.
@@ -116,8 +118,192 @@ func New(deps agent.Dependencies) (agent.Agent, error) {
 		}
 	}
 
+	// Create state validator and recovery manager
+	da.validator = state.NewStateValidator(deps.Store, deps.GitHub, deps.Logger)
+	da.recoveryManager = NewRecoveryManager(deps, da.validator)
+
+	// Perform startup validation if enabled
+	if deps.Config.Agents.Developer.Recovery.Enabled && deps.Config.Agents.Developer.Recovery.StartupValidation {
+		startupValidator := NewStartupValidator(deps, da.validator)
+		report, err := startupValidator.ValidateAndRecoverStartup(context.Background(), agent.TypeDeveloper)
+		if err != nil {
+			deps.Logger.Error("startup validation failed", "error", err)
+		} else {
+			deps.Logger.Info("startup validation completed",
+				"valid", report.Valid,
+				"startup_safe", report.StartupSafe,
+				"orphaned_count", len(report.OrphanedWorkFound),
+				"recovery_actions", len(report.RecoveryActions))
+		}
+	}
+
 	return da, nil
 }
+
+// NewStartupValidator creates a startup validator - wrapper function.
+func NewStartupValidator(deps agent.Dependencies, validator *state.StateValidator) *StartupValidator {
+	return &StartupValidator{
+		deps:      deps,
+		validator: validator,
+		logger:    deps.Logger.With("component", "startup_validator"),
+	}
+}
+
+// StartupValidator handles agent initialization validation and recovery.
+type StartupValidator struct {
+	deps      agent.Dependencies
+	validator *state.StateValidator
+	logger    *slog.Logger
+}
+
+// ValidateAndRecoverStartup performs comprehensive startup validation and recovery.
+func (s *StartupValidator) ValidateAndRecoverStartup(ctx context.Context, agentType agent.AgentType) (*StartupValidationReport, error) {
+	start := time.Now()
+	
+	s.logger.Info("starting startup validation and recovery", "agent_type", agentType)
+
+	report := &StartupValidationReport{
+		Valid:              true,
+		OrphanedWorkFound:  make([]*state.OrphanedWorkItem, 0),
+		RecoveryActions:    make([]*RecoveryAction, 0),
+		ValidationIssues:   make([]*state.ValidationIssue, 0),
+		RecommendedActions: make([]*state.RecommendedAction, 0),
+		StartupSafe:        true,
+		ValidatedAt:        start,
+	}
+
+	// Check for existing agent state
+	existingState, err := s.deps.Store.Load(ctx, string(agentType))
+	if err != nil {
+		s.logger.Error("failed to load existing agent state", "error", err)
+		report.StartupSafe = false
+		return report, err
+	}
+
+	// If agent has existing state, validate it
+	if existingState != nil {
+		if err := s.validateExistingState(ctx, existingState, report); err != nil {
+			s.logger.Error("failed to validate existing state", "error", err)
+			report.StartupSafe = false
+		}
+	}
+
+	// Scan for orphaned work across all agents
+	if err := s.detectOrphanedWork(ctx, report); err != nil {
+		s.logger.Error("failed to detect orphaned work", "error", err)
+		report.StartupSafe = false
+	}
+
+	// Final assessment
+	report.Valid = len(report.ValidationIssues) == 0 && len(report.OrphanedWorkFound) == 0
+	report.ValidationDuration = time.Since(start)
+
+	s.logger.Info("startup validation completed",
+		"valid", report.Valid,
+		"startup_safe", report.StartupSafe,
+		"orphaned_work", len(report.OrphanedWorkFound),
+		"recovery_actions", len(report.RecoveryActions),
+		"duration", report.ValidationDuration)
+
+	return report, nil
+}
+
+// validateExistingState validates an existing agent state.
+func (s *StartupValidator) validateExistingState(ctx context.Context, existingState *state.AgentWorkState, report *StartupValidationReport) error {
+	s.logger.Info("validating existing agent state",
+		"agent_type", existingState.AgentType,
+		"issue_number", existingState.IssueNumber,
+		"state", existingState.State,
+		"last_update", existingState.UpdatedAt)
+
+	// Validate the existing state
+	validationReport, err := s.validator.ValidateWorkState(ctx, existingState)
+	if err != nil {
+		return fmt.Errorf("validating existing state: %w", err)
+	}
+
+	// Merge validation results into startup report
+	report.ValidationIssues = append(report.ValidationIssues, validationReport.IssuesFound...)
+	report.RecommendedActions = append(report.RecommendedActions, validationReport.RecommendedActions...)
+
+	// Check if this is orphaned work
+	for _, orphan := range validationReport.OrphanedWork {
+		report.OrphanedWorkFound = append(report.OrphanedWorkFound, orphan)
+	}
+
+	if !validationReport.Valid {
+		report.Valid = false
+		report.StartupSafe = false
+		s.logger.Warn("existing agent state has validation issues",
+			"issues_count", len(validationReport.IssuesFound),
+			"drifts_count", len(validationReport.StateDrifts))
+	}
+
+	return nil
+}
+
+// detectOrphanedWork scans for orphaned work across all agents.
+func (s *StartupValidator) detectOrphanedWork(ctx context.Context, report *StartupValidationReport) error {
+	s.logger.Info("scanning for orphaned work")
+
+	orphanedItems, err := s.validator.DetectOrphanedWork(ctx)
+	if err != nil {
+		return fmt.Errorf("detecting orphaned work: %w", err)
+	}
+
+	report.OrphanedWorkFound = append(report.OrphanedWorkFound, orphanedItems...)
+
+	if len(orphanedItems) > 0 {
+		report.Valid = false
+		s.logger.Warn("orphaned work detected", "count", len(orphanedItems))
+		
+		for _, orphan := range orphanedItems {
+			s.logger.Info("orphaned work details",
+				"agent_type", orphan.AgentType,
+				"issue_number", orphan.IssueNumber,
+				"state", orphan.State,
+				"age_hours", orphan.AgeHours,
+				"recovery_type", orphan.RecoveryType)
+		}
+	}
+
+	return nil
+}
+
+// StartupValidationReport contains the results of startup validation.
+type StartupValidationReport struct {
+	Valid                bool                        `json:"valid"`
+	OrphanedWorkFound    []*state.OrphanedWorkItem   `json:"orphaned_work_found"`
+	RecoveryActions      []*RecoveryAction           `json:"recovery_actions"`
+	ValidationIssues     []*state.ValidationIssue    `json:"validation_issues"`
+	RecommendedActions   []*state.RecommendedAction  `json:"recommended_actions"`
+	StartupSafe          bool                        `json:"startup_safe"`
+	ValidationDuration   time.Duration               `json:"validation_duration"`
+	ValidatedAt          time.Time                   `json:"validated_at"`
+}
+
+// RecoveryAction represents an action taken during startup recovery.
+type RecoveryAction struct {
+	Type        RecoveryActionType `json:"type"`
+	AgentType   string             `json:"agent_type"`
+	IssueNumber int                `json:"issue_number"`
+	Description string             `json:"description"`
+	Success     bool               `json:"success"`
+	Error       string             `json:"error,omitempty"`
+	Duration    time.Duration      `json:"duration"`
+	Details     map[string]string  `json:"details,omitempty"`
+}
+
+// RecoveryActionType represents the type of recovery action.
+type RecoveryActionType string
+
+const (
+	ActionCleanupOrphaned    RecoveryActionType = "cleanup_orphaned"
+	ActionResumeWork         RecoveryActionType = "resume_work"
+	ActionValidateState      RecoveryActionType = "validate_state"
+	ActionReconcileDrift     RecoveryActionType = "reconcile_drift"
+	ActionFlagForManual      RecoveryActionType = "flag_for_manual"
+)
 
 // Type returns the developer agent type.
 func (d *DeveloperAgent) Type() agent.AgentType {

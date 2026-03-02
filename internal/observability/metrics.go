@@ -224,6 +224,67 @@ func (m *Metrics) RecordWorkflowTransition(ctx context.Context, fromState, toSta
 	m.Inc("workflow_transitions_total", labels)
 }
 
+// RecordOrphanedWorkDetected records metrics for orphaned work detection
+func (m *Metrics) RecordOrphanedWorkDetected(ctx context.Context, agentType string, recoveryType string, ageHours float64) {
+	labels := map[string]string{
+		"agent_type":    agentType,
+		"recovery_type": recoveryType,
+	}
+	
+	m.Inc("orphaned_work_detected_total", labels)
+	m.Observe("orphaned_work_age_hours", ageHours, labels)
+}
+
+// RecordStateDriftResolved records metrics for state drift resolution
+func (m *Metrics) RecordStateDriftResolved(ctx context.Context, agentType string, driftType string, success bool) {
+	labels := map[string]string{
+		"agent_type": agentType,
+		"drift_type": driftType,
+	}
+	
+	m.Inc("state_drift_resolution_total", labels)
+	if success {
+		m.Inc("state_drift_resolved_total", labels)
+	} else {
+		m.Inc("state_drift_resolution_failed_total", labels)
+	}
+}
+
+// RecordRecoveryAction records metrics for recovery actions
+func (m *Metrics) RecordRecoveryAction(ctx context.Context, agentType string, actionType string, duration time.Duration, success bool) {
+	labels := map[string]string{
+		"agent_type":   agentType,
+		"action_type":  actionType,
+	}
+	
+	m.Inc("recovery_actions_total", labels)
+	m.Observe("recovery_action_duration_ms", float64(duration.Milliseconds()), labels)
+	
+	if success {
+		m.Inc("recovery_actions_success_total", labels)
+	} else {
+		m.Inc("recovery_actions_failure_total", labels)
+	}
+}
+
+// RecordValidationResults records metrics for validation results
+func (m *Metrics) RecordValidationResults(ctx context.Context, agentType string, valid bool, issuesCount int, driftCount int, duration time.Duration) {
+	labels := map[string]string{
+		"agent_type": agentType,
+	}
+	
+	m.Inc("validation_runs_total", labels)
+	m.Observe("validation_duration_ms", float64(duration.Milliseconds()), labels)
+	m.Observe("validation_issues_found", float64(issuesCount), labels)
+	m.Observe("validation_drifts_found", float64(driftCount), labels)
+	
+	if valid {
+		m.Inc("validation_passed_total", labels)
+	} else {
+		m.Inc("validation_failed_total", labels)
+	}
+}
+
 // metricKey creates a unique key for a metric with labels
 func (m *Metrics) metricKey(name string, labels map[string]string) string {
 	key := name
