@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"sync"
 	"time"
 )
 
@@ -17,43 +18,48 @@ type CorrelationContextKey struct{}
 type WorkflowStage string
 
 const (
-	WorkflowStageStart       WorkflowStage = "start"
-	WorkflowStageClaim       WorkflowStage = "claim"
-	WorkflowStageAnalyze     WorkflowStage = "analyze"
-	WorkflowStageDecompose   WorkflowStage = "decompose"
-	WorkflowStageImplement   WorkflowStage = "implement"
-	WorkflowStageCommit      WorkflowStage = "commit"
-	WorkflowStagePR          WorkflowStage = "pr"
-	WorkflowStageReview      WorkflowStage = "review"
-	WorkflowStageComplete    WorkflowStage = "complete"
-	WorkflowStageHandoff     WorkflowStage = "handoff"
-	WorkflowStageIdle        WorkflowStage = "idle"
-	WorkflowStageError       WorkflowStage = "error"
+	WorkflowStageStart     WorkflowStage = "start"
+	WorkflowStageClaim     WorkflowStage = "claim"
+	WorkflowStageAnalyze   WorkflowStage = "analyze"
+	WorkflowStageDecompose WorkflowStage = "decompose"
+	WorkflowStageImplement WorkflowStage = "implement"
+	WorkflowStageCommit    WorkflowStage = "commit"
+	WorkflowStagePR        WorkflowStage = "pr"
+	WorkflowStageReview    WorkflowStage = "review"
+	WorkflowStageComplete  WorkflowStage = "complete"
+	WorkflowStageHandoff   WorkflowStage = "handoff"
+	WorkflowStageIdle      WorkflowStage = "idle"
+	WorkflowStageError     WorkflowStage = "error"
 )
 
-// CorrelationContext holds enriched context for multi-agent traceability
+// CorrelationContext holds enriched context for multi-agent traceability.
+// It is stored by pointer in context.Context and may be accessed from
+// multiple goroutines (e.g. orchestrator + agent goroutines), so all
+// mutable operations are protected by mu.
 type CorrelationContext struct {
+	mu sync.RWMutex `json:"-"`
+
 	// Core identification
 	CorrelationID string    `json:"correlation_id"`
 	CreatedAt     time.Time `json:"created_at"`
-	
+
 	// Agent context
 	AgentType     string `json:"agent_type"`
 	AgentInstance string `json:"agent_instance,omitempty"`
-	
-	// Workflow context  
+
+	// Workflow context
 	WorkflowStage WorkflowStage `json:"workflow_stage"`
 	IssueID       int           `json:"issue_id,omitempty"`
 	TaskID        string        `json:"task_id,omitempty"`
-	
+
 	// Tracing context
 	ParentCorrelationID string            `json:"parent_correlation_id,omitempty"`
 	HandoffChain        []HandoffInfo     `json:"handoff_chain,omitempty"`
 	Metadata            map[string]string `json:"metadata,omitempty"`
-	
+
 	// Performance context
-	StartTime    time.Time     `json:"start_time,omitempty"`
-	StageEntries []StageEntry  `json:"stage_entries,omitempty"`
+	StartTime    time.Time    `json:"start_time,omitempty"`
+	StageEntries []StageEntry `json:"stage_entries,omitempty"`
 }
 
 // HandoffInfo tracks agent-to-agent handoffs
@@ -65,7 +71,7 @@ type HandoffInfo struct {
 	PayloadSize int       `json:"payload_size,omitempty"`
 }
 
-// StageEntry tracks workflow stage transitions  
+// StageEntry tracks workflow stage transitions
 type StageEntry struct {
 	Stage     WorkflowStage `json:"stage"`
 	EnteredAt time.Time     `json:"entered_at"`
@@ -117,14 +123,14 @@ func NewCorrelationID() string {
 // NewCorrelationContext creates a new correlation context with the given parameters
 func NewCorrelationContext(agentType string, issueID int) *CorrelationContext {
 	return &CorrelationContext{
-		CorrelationID:  NewCorrelationID(),
-		CreatedAt:      time.Now(),
-		AgentType:      agentType,
-		WorkflowStage:  WorkflowStageStart,
-		IssueID:        issueID,
-		StartTime:      time.Now(),
-		Metadata:       make(map[string]string),
-		StageEntries:   []StageEntry{{Stage: WorkflowStageStart, EnteredAt: time.Now()}},
+		CorrelationID: NewCorrelationID(),
+		CreatedAt:     time.Now(),
+		AgentType:     agentType,
+		WorkflowStage: WorkflowStageStart,
+		IssueID:       issueID,
+		StartTime:     time.Now(),
+		Metadata:      make(map[string]string),
+		StageEntries:  []StageEntry{{Stage: WorkflowStageStart, EnteredAt: time.Now()}},
 	}
 }
 
@@ -141,14 +147,14 @@ func EnsureCorrelationContext(ctx context.Context, agentType string, issueID int
 	if corrCtx := GetCorrelationContext(ctx); corrCtx != nil {
 		return ctx
 	}
-	
+
 	// Check if we at least have a correlation ID to reuse
 	if existingID := GetCorrelationID(ctx); existingID != "" {
 		corrCtx := NewCorrelationContext(agentType, issueID)
 		corrCtx.CorrelationID = existingID
 		return WithCorrelationContext(ctx, corrCtx)
 	}
-	
+
 	// Create completely new correlation context
 	corrCtx := NewCorrelationContext(agentType, issueID)
 	return WithCorrelationContext(ctx, corrCtx)
@@ -160,7 +166,8 @@ func WithWorkflowStage(ctx context.Context, stage WorkflowStage) context.Context
 	if corrCtx == nil {
 		return ctx
 	}
-	
+
+	corrCtx.mu.Lock()
 	// Update the current stage entry duration if there was a previous stage
 	if len(corrCtx.StageEntries) > 0 {
 		lastEntry := &corrCtx.StageEntries[len(corrCtx.StageEntries)-1]
@@ -168,14 +175,15 @@ func WithWorkflowStage(ctx context.Context, stage WorkflowStage) context.Context
 			lastEntry.Duration = time.Since(lastEntry.EnteredAt)
 		}
 	}
-	
+
 	// Create new stage entry
 	corrCtx.WorkflowStage = stage
 	corrCtx.StageEntries = append(corrCtx.StageEntries, StageEntry{
 		Stage:     stage,
 		EnteredAt: time.Now(),
 	})
-	
+	corrCtx.mu.Unlock()
+
 	return WithCorrelationContext(ctx, corrCtx)
 }
 
@@ -185,7 +193,7 @@ func WithHandoff(ctx context.Context, fromAgent, toAgent, reason string, payload
 	if corrCtx == nil {
 		return ctx
 	}
-	
+
 	handoff := HandoffInfo{
 		FromAgent:   fromAgent,
 		ToAgent:     toAgent,
@@ -193,10 +201,12 @@ func WithHandoff(ctx context.Context, fromAgent, toAgent, reason string, payload
 		Reason:      reason,
 		PayloadSize: payloadSize,
 	}
-	
+
+	corrCtx.mu.Lock()
 	corrCtx.HandoffChain = append(corrCtx.HandoffChain, handoff)
 	corrCtx.AgentType = toAgent // Update current agent
-	
+	corrCtx.mu.Unlock()
+
 	return WithCorrelationContext(ctx, corrCtx)
 }
 
@@ -206,17 +216,21 @@ func WithMetadata(ctx context.Context, key, value string) context.Context {
 	if corrCtx == nil {
 		return ctx
 	}
-	
+
+	corrCtx.mu.Lock()
 	if corrCtx.Metadata == nil {
 		corrCtx.Metadata = make(map[string]string)
 	}
 	corrCtx.Metadata[key] = value
-	
+	corrCtx.mu.Unlock()
+
 	return WithCorrelationContext(ctx, corrCtx)
 }
 
 // GetWorkflowDuration returns the total duration of the workflow
 func (cc *CorrelationContext) GetWorkflowDuration() time.Duration {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
 	if cc.StartTime.IsZero() {
 		return 0
 	}
@@ -225,12 +239,13 @@ func (cc *CorrelationContext) GetWorkflowDuration() time.Duration {
 
 // GetStageDuration returns the duration spent in a specific stage
 func (cc *CorrelationContext) GetStageDuration(stage WorkflowStage) time.Duration {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
 	for _, entry := range cc.StageEntries {
 		if entry.Stage == stage {
 			if entry.Duration > 0 {
 				return entry.Duration
 			}
-			// If it's the current stage, calculate duration from entry time
 			return time.Since(entry.EnteredAt)
 		}
 	}
@@ -239,10 +254,60 @@ func (cc *CorrelationContext) GetStageDuration(stage WorkflowStage) time.Duratio
 
 // GetHandoffCount returns the number of handoffs in this workflow
 func (cc *CorrelationContext) GetHandoffCount() int {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
 	return len(cc.HandoffChain)
 }
 
 // IsCurrentStage checks if the given stage is the current workflow stage
 func (cc *CorrelationContext) IsCurrentStage(stage WorkflowStage) bool {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
 	return cc.WorkflowStage == stage
+}
+
+// GetAgentType returns the current agent type (thread-safe)
+func (cc *CorrelationContext) GetAgentType() string {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	return cc.AgentType
+}
+
+// GetCurrentWorkflowStage returns the current workflow stage (thread-safe)
+func (cc *CorrelationContext) GetCurrentWorkflowStage() WorkflowStage {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	return cc.WorkflowStage
+}
+
+// GetMetadataCopy returns a copy of the metadata map (thread-safe)
+func (cc *CorrelationContext) GetMetadataCopy() map[string]string {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	if cc.Metadata == nil {
+		return nil
+	}
+	cp := make(map[string]string, len(cc.Metadata))
+	for k, v := range cc.Metadata {
+		cp[k] = v
+	}
+	return cp
+}
+
+// GetStageEntriesCopy returns a copy of the stage entries slice (thread-safe)
+func (cc *CorrelationContext) GetStageEntriesCopy() []StageEntry {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	entries := make([]StageEntry, len(cc.StageEntries))
+	copy(entries, cc.StageEntries)
+	return entries
+}
+
+// GetHandoffChainCopy returns a copy of the handoff chain slice (thread-safe)
+func (cc *CorrelationContext) GetHandoffChainCopy() []HandoffInfo {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	chain := make([]HandoffInfo, len(cc.HandoffChain))
+	copy(chain, cc.HandoffChain)
+	return chain
 }

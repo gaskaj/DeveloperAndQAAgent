@@ -1,0 +1,164 @@
+
+services:
+  # Main test runner service
+  test-runner:
+    build:
+      context: .
+      dockerfile: test.Dockerfile
+      target: test
+    environment:
+      - GO_TEST_TIMEOUT=30m
+      - GO_TEST_PARALLEL=4
+      - INTEGRATION_TEST_MODE=true
+      - TEST_WORKSPACE_DIR=/tmp/test-workspaces
+      - TEST_STATE_DIR=/tmp/test-state
+    volumes:
+      - .:/workspace
+      - test-cache:/go/pkg/mod
+      - test-build-cache:/root/.cache/go-build
+      - test-workspaces:/tmp/test-workspaces
+      - test-state:/tmp/test-state
+    working_dir: /workspace
+    command: >
+      sh -c "
+        echo 'Running integration tests...' &&
+        go test -v -race -timeout=25m ./internal/integration/... -count=1 &&
+        echo 'Running unit tests to verify integration...' &&
+        go test -v -race -timeout=5m ./... -short &&
+        echo 'Running build verification...' &&
+        go build -o /tmp/agentctl ./cmd/agentctl &&
+        echo 'All tests completed successfully!'
+      "
+    depends_on:
+      - mock-github-api
+      - mock-claude-api
+      - test-state-store
+    networks:
+      - test-network
+
+  # Mock GitHub API service for isolated testing
+  mock-github-api:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./test/fixtures/github-api:/usr/share/nginx/html
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # Mock Claude API service for isolated testing  
+  mock-claude-api:
+    image: nginx:alpine
+    ports:
+      - "8081:80"
+    volumes:
+      - ./test/fixtures/claude-api:/usr/share/nginx/html
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # Redis for state store testing (optional - can use file-based as well)
+  test-state-store:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --save ""
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # Performance test runner with resource limits
+  performance-tests:
+    build:
+      context: .
+      dockerfile: test.Dockerfile
+      target: test
+    environment:
+      - GO_TEST_TIMEOUT=45m
+      - GO_TEST_PARALLEL=2
+      - INTEGRATION_TEST_MODE=performance
+      - TEST_WORKSPACE_DIR=/tmp/perf-workspaces
+      - TEST_STATE_DIR=/tmp/perf-state
+    volumes:
+      - .:/workspace
+      - perf-cache:/go/pkg/mod
+      - perf-build-cache:/root/.cache/go-build
+      - perf-workspaces:/tmp/perf-workspaces
+      - perf-state:/tmp/perf-state
+    working_dir: /workspace
+    mem_limit: 512m
+    cpus: 2
+    command: >
+      sh -c "
+        echo 'Running performance integration tests...' &&
+        go test -v -race -timeout=40m ./internal/integration/... -run='Performance|Concurrent|LongRunning' -count=1 &&
+        echo 'Performance tests completed!'
+      "
+    depends_on:
+      - mock-github-api
+      - mock-claude-api
+      - test-state-store
+    networks:
+      - test-network
+
+  # Race condition detection tests
+  race-tests:
+    build:
+      context: .
+      dockerfile: test.Dockerfile
+      target: test
+    environment:
+      - GO_TEST_TIMEOUT=20m
+      - INTEGRATION_TEST_MODE=race
+      - TEST_WORKSPACE_DIR=/tmp/race-workspaces
+      - TEST_STATE_DIR=/tmp/race-state
+    volumes:
+      - .:/workspace
+      - race-cache:/go/pkg/mod
+      - race-build-cache:/root/.cache/go-build
+      - race-workspaces:/tmp/race-workspaces
+      - race-state:/tmp/race-state
+    working_dir: /workspace
+    command: >
+      sh -c "
+        echo 'Running race condition detection tests...' &&
+        go test -v -race -timeout=15m ./internal/integration/... -run='Race|Concurrent' -count=3 &&
+        echo 'Race condition tests completed!'
+      "
+    depends_on:
+      - mock-github-api
+      - mock-claude-api
+      - test-state-store
+    networks:
+      - test-network
+
+volumes:
+  test-cache:
+  test-build-cache:
+  test-workspaces:
+  test-state:
+  perf-cache:
+  perf-build-cache:
+  perf-workspaces:
+  perf-state:
+  race-cache:
+  race-build-cache:
+  race-workspaces:
+  race-state:
+
+networks:
+  test-network:
+    driver: bridge

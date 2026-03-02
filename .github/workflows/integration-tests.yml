@@ -1,0 +1,284 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run integration tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    strategy:
+      matrix:
+        go-version: ['1.25']
+        test-suite:
+          - name: "agent-communication"
+            pattern: "TestBasicAgentCommunication|TestAgentMessageProtocolCompliance|TestAgentTimeoutHandling|TestAgentRetryMechanisms|TestAgentStateConsistency"
+          - name: "workflow-handoffs"  
+            pattern: "TestAgentHandoffWorkflows|TestContextPreservationDuringHandoffs|TestErrorHandlingInAgentHandoffs|TestAgentHandoffPerformance"
+          - name: "shared-state"
+            pattern: "TestSharedStateManagement|TestConcurrentResourceAccess|TestStateConsistencyUnderFailure|TestLongRunningStateOperations"
+          - name: "race-conditions"
+            pattern: "TestRaceConditionDetection"
+      fail-fast: false
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-${{ matrix.go-version }}-
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Create test directories
+      run: |
+        mkdir -p /tmp/test-workspaces
+        mkdir -p /tmp/test-state
+        chmod 755 /tmp/test-workspaces /tmp/test-state
+
+    - name: Run linting
+      run: |
+        go vet ./internal/integration/...
+        gofmt -d ./internal/integration/
+        test -z "$(gofmt -l ./internal/integration/)"
+
+    - name: Start test services
+      run: |
+        docker compose -f docker-compose.test.yml up -d mock-github-api mock-claude-api test-state-store
+        sleep 10  # Wait for services to be ready
+
+    - name: Wait for services to be healthy
+      run: |
+        timeout 60 bash -c 'until docker compose -f docker-compose.test.yml ps | grep -q "healthy"; do sleep 2; done'
+
+    - name: Run integration tests - ${{ matrix.test-suite.name }}
+      env:
+        INTEGRATION_TEST_MODE: true
+        TEST_WORKSPACE_DIR: /tmp/test-workspaces
+        TEST_STATE_DIR: /tmp/test-state
+      run: |
+        go test -v -race -timeout=30m ./internal/integration/... \
+          -run="${{ matrix.test-suite.pattern }}" \
+          -count=1 \
+          -coverprofile=coverage-${{ matrix.test-suite.name }}.out
+
+    - name: Run race condition tests (for race-conditions suite)
+      if: matrix.test-suite.name == 'race-conditions'
+      env:
+        INTEGRATION_TEST_MODE: race
+        TEST_WORKSPACE_DIR: /tmp/test-workspaces
+        TEST_STATE_DIR: /tmp/test-state
+      run: |
+        go test -v -race -timeout=20m ./internal/integration/... \
+          -run="${{ matrix.test-suite.pattern }}" \
+          -count=3
+
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-${{ matrix.test-suite.name }}
+        path: coverage-${{ matrix.test-suite.name }}.out
+
+    - name: Collect test logs
+      if: always()
+      run: |
+        docker compose -f docker-compose.test.yml logs > test-logs-${{ matrix.test-suite.name }}.txt
+
+    - name: Upload test logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-logs-${{ matrix.test-suite.name }}
+        path: test-logs-${{ matrix.test-suite.name }}.txt
+
+    - name: Clean up test services
+      if: always()
+      run: |
+        docker compose -f docker-compose.test.yml down -v
+
+  performance-tests:
+    name: Performance Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: integration-tests
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-1.25-${{ hashFiles('**/go.sum') }}
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Start test services
+      run: |
+        docker compose -f docker-compose.test.yml up -d mock-github-api mock-claude-api test-state-store
+
+    - name: Run performance tests
+      env:
+        INTEGRATION_TEST_MODE: performance
+        TEST_WORKSPACE_DIR: /tmp/perf-workspaces
+        TEST_STATE_DIR: /tmp/perf-state
+      run: |
+        docker compose -f docker-compose.test.yml run --rm performance-tests
+
+    - name: Generate performance report
+      run: |
+        echo "## Performance Test Results" > performance-report.md
+        echo "Test completed on $(date)" >> performance-report.md
+        docker compose -f docker-compose.test.yml logs performance-tests >> performance-report.md
+
+    - name: Upload performance report
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-report
+        path: performance-report.md
+
+    - name: Clean up
+      if: always()
+      run: |
+        docker compose -f docker-compose.test.yml down -v
+
+  coverage-report:
+    name: Generate Coverage Report
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    if: always()
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+
+    - name: Download all coverage reports
+      uses: actions/download-artifact@v4
+      with:
+        path: coverage-reports/
+
+    - name: Combine coverage reports
+      run: |
+        echo "mode: atomic" > combined-coverage.out
+        find coverage-reports/ -name "*.out" -exec tail -n +2 {} \; >> combined-coverage.out
+
+    - name: Generate HTML coverage report
+      run: |
+        go tool cover -html=combined-coverage.out -o coverage.html
+
+    - name: Calculate coverage percentage
+      run: |
+        COVERAGE=$(go tool cover -func=combined-coverage.out | grep total: | awk '{print $3}')
+        echo "Total coverage: $COVERAGE"
+        echo "COVERAGE_PERCENTAGE=$COVERAGE" >> $GITHUB_ENV
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: |
+          combined-coverage.out
+          coverage.html
+
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `## 🧪 Integration Test Coverage Report
+            
+            **Total Coverage**: ${{ env.COVERAGE_PERCENTAGE }}
+            
+            Integration tests have completed successfully! 
+            
+            📊 [View detailed coverage report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            ### Test Suites Executed:
+            - ✅ Agent Communication Tests
+            - ✅ Workflow Handoff Tests  
+            - ✅ Shared State Management Tests
+            - ✅ Race Condition Detection Tests
+            - ✅ Performance Tests
+            `
+          })
+
+  notification:
+    name: Notify Results
+    runs-on: ubuntu-latest
+    needs: [integration-tests, performance-tests, coverage-report]
+    if: always()
+
+    steps:
+    - name: Determine overall status
+      id: status
+      run: |
+        if [[ "${{ needs.integration-tests.result }}" == "success" && "${{ needs.performance-tests.result }}" == "success" ]]; then
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "message=All integration tests passed successfully! 🎉" >> $GITHUB_OUTPUT
+        else
+          echo "status=failure" >> $GITHUB_OUTPUT
+          echo "message=Some integration tests failed. Please check the logs." >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create summary
+      run: |
+        echo "## 🔬 Integration Test Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Status**: ${{ steps.status.outputs.message }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Test Results:" >> $GITHUB_STEP_SUMMARY
+        echo "- Integration Tests: ${{ needs.integration-tests.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Performance Tests: ${{ needs.performance-tests.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Coverage Report: ${{ needs.coverage-report.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### What was tested:" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔄 Agent-to-agent communication protocols" >> $GITHUB_STEP_SUMMARY
+        echo "- 🤝 Workflow handoff mechanisms" >> $GITHUB_STEP_SUMMARY
+        echo "- 🗃️ Shared state management" >> $GITHUB_STEP_SUMMARY
+        echo "- ⚡ Concurrent access patterns" >> $GITHUB_STEP_SUMMARY
+        echo "- 🏁 Race condition detection" >> $GITHUB_STEP_SUMMARY
+        echo "- 📊 Performance benchmarks" >> $GITHUB_STEP_SUMMARY

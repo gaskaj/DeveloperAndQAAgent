@@ -22,8 +22,10 @@ type Client struct {
 }
 
 // NewClient creates a new Claude API client.
-func NewClient(apiKey, model string, maxTokens int) *Client {
-	sdk := anthropic.NewClient(option.WithAPIKey(apiKey))
+// Optional request options (e.g. option.WithBaseURL) can be passed for testing.
+func NewClient(apiKey, model string, maxTokens int, opts ...option.RequestOption) *Client {
+	allOpts := append([]option.RequestOption{option.WithAPIKey(apiKey)}, opts...)
+	sdk := anthropic.NewClient(allOpts...)
 	return &Client{
 		sdk:       sdk,
 		model:     model,
@@ -50,7 +52,7 @@ func (c *Client) SendMessage(ctx context.Context, system string, messages []anth
 		// Use retry with circuit breaker protection
 		retryer := c.errorManager.GetRetryer("claude_api")
 		circuitBreaker := c.errorManager.GetCircuitBreaker("claude_api")
-		
+
 		var result *anthropic.Message
 		err := circuitBreaker.Execute(ctx, func(ctx context.Context) error {
 			var err error
@@ -59,17 +61,17 @@ func (c *Client) SendMessage(ctx context.Context, system string, messages []anth
 			})
 			return err
 		})
-		
+
 		return result, err
 	}
-	
+
 	return c.sendMessageCore(ctx, system, messages)
 }
 
 // sendMessageCore contains the core message sending logic
 func (c *Client) sendMessageCore(ctx context.Context, system string, messages []anthropic.MessageParam) (*anthropic.Message, error) {
 	start := time.Now()
-	
+
 	params := anthropic.MessageNewParams{
 		Model:     anthropic.Model(c.model),
 		MaxTokens: int64(c.maxTokens),
@@ -83,7 +85,7 @@ func (c *Client) sendMessageCore(ctx context.Context, system string, messages []
 
 	response, err := c.sdk.Messages.New(ctx, params)
 	duration := time.Since(start)
-	
+
 	// Calculate token counts (approximation for input)
 	inputTokens := c.estimateTokens(system, messages)
 	outputTokens := 0
@@ -96,7 +98,7 @@ func (c *Client) sendMessageCore(ctx context.Context, system string, messages []
 			inputTokens = int(response.Usage.InputTokens)
 		}
 	}
-	
+
 	// Record metrics and structured logs
 	success := err == nil
 	if c.metrics != nil {
@@ -105,7 +107,7 @@ func (c *Client) sendMessageCore(ctx context.Context, system string, messages []
 	if c.structuredLogger != nil {
 		c.structuredLogger.LogLLMCall(ctx, c.model, inputTokens, outputTokens, duration, err)
 	}
-	
+
 	if err != nil {
 		// Classify the error for proper retry handling
 		return nil, agentErrors.ClassifyError(fmt.Errorf("claude API call: %w", err))
@@ -122,14 +124,14 @@ func (c *Client) SendMessageWithTools(ctx context.Context, system string, messag
 			return c.sendMessageWithToolsCore(ctx, system, messages, tools)
 		})
 	}
-	
+
 	return c.sendMessageWithToolsCore(ctx, system, messages, tools)
 }
 
 // sendMessageWithToolsCore contains the core message with tools sending logic
 func (c *Client) sendMessageWithToolsCore(ctx context.Context, system string, messages []anthropic.MessageParam, tools []anthropic.ToolUnionParam) (*anthropic.Message, error) {
 	start := time.Now()
-	
+
 	params := anthropic.MessageNewParams{
 		Model:     anthropic.Model(c.model),
 		MaxTokens: int64(c.maxTokens),
@@ -144,7 +146,7 @@ func (c *Client) sendMessageWithToolsCore(ctx context.Context, system string, me
 
 	response, err := c.sdk.Messages.New(ctx, params)
 	duration := time.Since(start)
-	
+
 	// Calculate token counts
 	inputTokens := c.estimateTokens(system, messages)
 	outputTokens := 0
@@ -156,7 +158,7 @@ func (c *Client) sendMessageWithToolsCore(ctx context.Context, system string, me
 			inputTokens = int(response.Usage.InputTokens)
 		}
 	}
-	
+
 	// Record metrics and structured logs
 	success := err == nil
 	if c.metrics != nil {
@@ -165,7 +167,7 @@ func (c *Client) sendMessageWithToolsCore(ctx context.Context, system string, me
 	if c.structuredLogger != nil {
 		c.structuredLogger.LogLLMCall(ctx, c.model, inputTokens, outputTokens, duration, err)
 	}
-	
+
 	if err != nil {
 		// Classify the error for proper retry handling
 		return nil, agentErrors.ClassifyError(fmt.Errorf("claude API call with tools: %w", err))
