@@ -99,9 +99,9 @@ github:
 	_, err := LoadWithOptions(cfgPath, true) // Skip network validation in tests
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "github.token")
-	assert.Contains(t, err.Error(), "required field is empty")
+	assert.Contains(t, err.Error(), "GITHUB_TOKEN")
 	assert.Contains(t, err.Error(), "claude.api_key")
-	assert.Contains(t, err.Error(), "required field is empty")
+	assert.Contains(t, err.Error(), "ANTHROPIC_API_KEY")
 }
 
 func TestLoad_Defaults(t *testing.T) {

@@ -2,6 +2,12 @@
 
 Configuration is loaded from a YAML file using Viper. Environment variables are expanded in all string values using `${VAR}` syntax.
 
+> 📖 **Complete Reference**: See [Configuration Schema Reference](configuration-schema.md) for the complete documentation of all configuration options, defaults, validation rules, and examples.
+
+## Quick Start
+
+For detailed configuration reference, validation rules, and examples, see the [Configuration Schema Reference](configuration-schema.md).
+
 ## Loading
 
 ```go
@@ -9,6 +15,44 @@ cfg, err := config.Load("configs/config.yaml")
 ```
 
 `Load()` reads the file, expands environment variables, unmarshals into `Config`, and validates required fields.
+
+## Configuration Validation and Management
+
+The enhanced configuration system provides comprehensive validation and management tools:
+
+### CLI Commands
+
+```bash
+# Validate configuration without starting agents
+agentctl config validate --config=config.yaml
+
+# Show all default values in YAML format
+agentctl config show-defaults --format=yaml
+
+# Display environment variable mappings
+agentctl config env-vars
+
+# Skip network validation for faster checking
+agentctl config validate --config=config.yaml --skip-network
+```
+
+### Validation Features
+
+- **Required field validation** with helpful error messages
+- **Format validation** for tokens, URLs, and durations
+- **Range validation** for numeric values and limits
+- **Permission validation** for directory access
+- **Network validation** for API connectivity (optional)
+- **Logical validation** for interdependent settings
+
+### Enhanced Error Reporting
+
+The new validation system provides structured error messages with actionable guidance:
+
+```
+config.github.token: token format appears invalid (got: xyz_****masked****)
+config.workspace.limits.min_free_disk_mb: should be larger than max_size_mb to prevent disk space exhaustion (got: 500)
+```
 
 ## Full YAML Reference
 

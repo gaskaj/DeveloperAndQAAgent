@@ -171,9 +171,9 @@ decomposition:
   # When enabled, the agent estimates complexity during analysis and breaks
   # large issues into smaller subtasks that are processed independently.
   enabled: true
-  # Iteration budget for complexity estimation (hard limit is 20).
+  # Iteration budget for complexity estimation (recommended: 20-50).
   # Issues estimated to need more iterations than this are decomposed proactively.
-  max_iteration_budget: 250
+  max_iteration_budget: 50
   # Maximum number of subtasks when decomposing an issue.
   max_subtasks: 5
 

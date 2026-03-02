@@ -80,11 +80,11 @@ func TestValidate_TokenFormats(t *testing.T) {
 				errStr := err.Error()
 				if tt.expectGHError {
 					assert.Contains(t, errStr, "github.token")
-					assert.Contains(t, errStr, "format appears invalid")
+					assert.Contains(t, errStr, "GitHub settings")
 				}
 				if tt.expectClaudeError {
 					assert.Contains(t, errStr, "claude.api_key")
-					assert.Contains(t, errStr, "format appears invalid")
+					assert.Contains(t, errStr, "Anthropic Console")
 				}
 			} else {
 				assert.NoError(t, err)
@@ -219,13 +219,21 @@ func TestValidate_GitHubAccess(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 		
-		err := validateGitHubAccess(ctx, cfg)
+		var errs ValidationErrors
+		validateGitHubAccess(ctx, cfg, &errs)
 		// With real GitHub API, this would fail since we're using a test token
 		// The test validates the error reporting structure
-		if err != nil {
-			var validationErr ConfigValidationError
-			assert.ErrorAs(t, err, &validationErr)
-			assert.Equal(t, "github.token", validationErr.Field)
+		if errs.HasErrors() {
+			assert.True(t, len(errs.Errors) > 0)
+			// Check that at least one error is related to GitHub token
+			found := false
+			for _, err := range errs.Errors {
+				if strings.Contains(err.Field, "github.token") {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "Should have GitHub token validation error")
 		}
 	})
 }
@@ -266,12 +274,19 @@ func TestValidate_ClaudeAccess(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
 
-			err := validateClaudeAccess(ctx, cfg)
+			var errs ValidationErrors
+			validateClaudeAccess(ctx, cfg, &errs)
 			if tt.expectError {
-				require.Error(t, err)
-				var validationErr ConfigValidationError
-				assert.ErrorAs(t, err, &validationErr)
-				assert.Equal(t, "claude.api_key", validationErr.Field)
+				assert.True(t, errs.HasErrors())
+				// Check that there's a Claude API key error
+				found := false
+				for _, err := range errs.Errors {
+					if strings.Contains(err.Field, "claude.api_key") {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "Should have Claude API key validation error")
 			} else {
 				// Network validation may succeed or fail based on actual network
 				// We mainly test that it doesn't panic and handles errors gracefully
@@ -301,17 +316,27 @@ func TestValidate_Defaults(t *testing.T) {
 	assert.Equal(t, 120, cfg.Creativity.IdleThresholdSeconds)
 }
 
-func TestConfigValidationError_Error(t *testing.T) {
-	err := ConfigValidationError{
+func TestValidationError_Error(t *testing.T) {
+	err := ValidationError{
 		Field:   "github.token",
 		Value:   "ghp_****masked****1234",
-		Issue:   "token format appears invalid",
-		Fix:     "Use a personal access token from GitHub settings",
-		Example: "ghp_xxxxxxxxxxxxxxxxxxxx",
+		Rule:    "format",
+		Message: "token format appears invalid",
 	}
 
-	expected := "github.token: token format appears invalid. Fix: Use a personal access token from GitHub settings. Example: ghp_xxxxxxxxxxxxxxxxxxxx"
+	expected := "config.github.token: token format appears invalid (got: ghp_****masked****1234)"
 	assert.Equal(t, expected, err.Error())
+}
+
+func TestValidationErrors_Error(t *testing.T) {
+	var errs ValidationErrors
+	errs.Add("github.token", "", "required", "token is required")
+	errs.Add("github.owner", "", "required", "owner is required")
+
+	result := errs.Error()
+	assert.Contains(t, result, "found 2 validation errors")
+	assert.Contains(t, result, "github.token")
+	assert.Contains(t, result, "github.owner")
 }
 
 func TestMaskToken(t *testing.T) {
