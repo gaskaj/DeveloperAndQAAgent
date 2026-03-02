@@ -6,6 +6,7 @@ import (
 
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/agent"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/workspace"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -15,6 +16,7 @@ type Orchestrator struct {
 	logger           *slog.Logger
 	structuredLogger *observability.StructuredLogger
 	metrics          *observability.Metrics
+	cleanupScheduler *workspace.Scheduler
 }
 
 // New creates a new Orchestrator with the given agents.
@@ -32,6 +34,12 @@ func (o *Orchestrator) WithObservability(structuredLogger *observability.Structu
 	return o
 }
 
+// WithWorkspaceCleanup adds workspace cleanup scheduling to the orchestrator
+func (o *Orchestrator) WithWorkspaceCleanup(scheduler *workspace.Scheduler) *Orchestrator {
+	o.cleanupScheduler = scheduler
+	return o
+}
+
 // Run starts all agents concurrently and blocks until they all stop or the context is cancelled.
 // The context cancellation triggers graceful shutdown of all agents.
 func (o *Orchestrator) Run(ctx context.Context) error {
@@ -44,6 +52,16 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	}
 	
 	g, ctx := errgroup.WithContext(ctx)
+	
+	// Start workspace cleanup scheduler if configured
+	if o.cleanupScheduler != nil {
+		o.logger.Info("starting workspace cleanup scheduler")
+		o.cleanupScheduler.Start(ctx)
+		defer func() {
+			o.logger.Info("stopping workspace cleanup scheduler")
+			o.cleanupScheduler.Stop()
+		}()
+	}
 
 	for _, a := range o.agents {
 		a := a // capture for goroutine

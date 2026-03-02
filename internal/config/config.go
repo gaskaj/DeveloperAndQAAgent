@@ -22,6 +22,7 @@ type Config struct {
 	Decomposition DecompositionConfig `mapstructure:"decomposition"`
 	ErrorHandling ErrorHandlingConfig `mapstructure:"error_handling"`
 	Shutdown      ShutdownConfig      `mapstructure:"shutdown"`
+	Workspace     WorkspaceConfig     `mapstructure:"workspace"`
 }
 
 // GitHubConfig holds GitHub-related configuration.
@@ -258,6 +259,33 @@ type CircuitBreakerConfigSpec struct {
 	MaxRequests  int64         `mapstructure:"max_requests"`
 	FailureRatio float64       `mapstructure:"failure_ratio"`
 	MinRequests  int64         `mapstructure:"min_requests"`
+}
+
+// WorkspaceConfig holds workspace management configuration.
+type WorkspaceConfig struct {
+	Cleanup    WorkspaceCleanupConfig `mapstructure:"cleanup"`
+	Limits     WorkspaceLimitsConfig  `mapstructure:"limits"`
+	Monitoring WorkspaceMonitoringConfig `mapstructure:"monitoring"`
+}
+
+// WorkspaceCleanupConfig holds workspace cleanup configuration.
+type WorkspaceCleanupConfig struct {
+	Enabled           bool          `mapstructure:"enabled"`
+	SuccessRetention  time.Duration `mapstructure:"success_retention"`
+	FailureRetention  time.Duration `mapstructure:"failure_retention"`
+	MaxConcurrent     int           `mapstructure:"max_concurrent"`
+}
+
+// WorkspaceLimitsConfig holds workspace resource limits.
+type WorkspaceLimitsConfig struct {
+	MaxSizeMB       int64 `mapstructure:"max_size_mb"`
+	MinFreeDiskMB   int64 `mapstructure:"min_free_disk_mb"`
+}
+
+// WorkspaceMonitoringConfig holds workspace monitoring configuration.
+type WorkspaceMonitoringConfig struct {
+	DiskCheckInterval time.Duration `mapstructure:"disk_check_interval"`
+	CleanupInterval   time.Duration `mapstructure:"cleanup_interval"`
 }
 
 // Load reads configuration from the given file path, expanding environment variables.

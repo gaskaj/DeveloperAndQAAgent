@@ -11,19 +11,71 @@ import (
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/workspace"
 )
 
 // DeveloperAgent monitors GitHub for issues and implements solutions.
 type DeveloperAgent struct {
 	agent.BaseAgent
-	poller *ghub.Poller
-	status agent.StatusReport
+	poller           *ghub.Poller
+	status           agent.StatusReport
+	workspaceManager workspace.Manager
 }
 
 // New creates a new DeveloperAgent.
 func New(deps agent.Dependencies) (agent.Agent, error) {
+	// Create workspace manager configuration
+	workspaceConfig := workspace.ManagerConfig{
+		BaseDir:              deps.Config.Agents.Developer.WorkspaceDir,
+		MaxSizeMB:            deps.Config.Workspace.Limits.MaxSizeMB,
+		MinFreeDiskMB:        deps.Config.Workspace.Limits.MinFreeDiskMB,
+		MaxConcurrent:        deps.Config.Workspace.Cleanup.MaxConcurrent,
+		SuccessRetention:     deps.Config.Workspace.Cleanup.SuccessRetention,
+		FailureRetention:     deps.Config.Workspace.Cleanup.FailureRetention,
+		DiskCheckInterval:    deps.Config.Workspace.Monitoring.DiskCheckInterval,
+		CleanupInterval:      deps.Config.Workspace.Monitoring.CleanupInterval,
+		CleanupEnabled:       deps.Config.Workspace.Cleanup.Enabled,
+	}
+
+	// Use defaults for any zero values
+	if workspaceConfig.MaxSizeMB == 0 {
+		defaultConfig := workspace.DefaultConfig()
+		workspaceConfig.MaxSizeMB = defaultConfig.MaxSizeMB
+	}
+	if workspaceConfig.MinFreeDiskMB == 0 {
+		defaultConfig := workspace.DefaultConfig()
+		workspaceConfig.MinFreeDiskMB = defaultConfig.MinFreeDiskMB
+	}
+	if workspaceConfig.MaxConcurrent == 0 {
+		defaultConfig := workspace.DefaultConfig()
+		workspaceConfig.MaxConcurrent = defaultConfig.MaxConcurrent
+	}
+	if workspaceConfig.SuccessRetention == 0 {
+		defaultConfig := workspace.DefaultConfig()
+		workspaceConfig.SuccessRetention = defaultConfig.SuccessRetention
+	}
+	if workspaceConfig.FailureRetention == 0 {
+		defaultConfig := workspace.DefaultConfig()
+		workspaceConfig.FailureRetention = defaultConfig.FailureRetention
+	}
+	if workspaceConfig.DiskCheckInterval == 0 {
+		defaultConfig := workspace.DefaultConfig()
+		workspaceConfig.DiskCheckInterval = defaultConfig.DiskCheckInterval
+	}
+	if workspaceConfig.CleanupInterval == 0 {
+		defaultConfig := workspace.DefaultConfig()
+		workspaceConfig.CleanupInterval = defaultConfig.CleanupInterval
+	}
+
+	// Create workspace manager
+	workspaceManager, err := workspace.NewManager(workspaceConfig, deps.Logger)
+	if err != nil {
+		return nil, fmt.Errorf("creating workspace manager: %w", err)
+	}
+
 	da := &DeveloperAgent{
-		BaseAgent: agent.NewBaseAgent(deps),
+		BaseAgent:        agent.NewBaseAgent(deps),
+		workspaceManager: workspaceManager,
 		status: agent.StatusReport{
 			Type:    agent.TypeDeveloper,
 			State:   string(state.StateIdle),
@@ -111,7 +163,19 @@ func (d *DeveloperAgent) Run(ctx context.Context) error {
 
 // Status returns the current agent status.
 func (d *DeveloperAgent) Status() agent.StatusReport {
-	return d.status
+	status := d.status
+	
+	// Add workspace statistics
+	if stats, err := d.workspaceManager.GetWorkspaceStats(context.Background()); err == nil {
+		status.WorkspaceStats = &agent.WorkspaceStats{
+			TotalWorkspaces:  stats.TotalWorkspaces,
+			ActiveWorkspaces: stats.ActiveWorkspaces,
+			TotalSizeMB:      stats.TotalSizeMB,
+			DiskFreeMB:       stats.DiskFreeMB,
+		}
+	}
+	
+	return status
 }
 
 func (d *DeveloperAgent) updateStatus(s state.WorkflowState, issueID int, msg string) {

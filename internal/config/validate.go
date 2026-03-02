@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"time"
 )
 
 // Validate checks that all required configuration fields are set.
@@ -63,6 +64,29 @@ func Validate(cfg *Config) error {
 	}
 	if cfg.Decomposition.MaxSubtasks == 0 {
 		cfg.Decomposition.MaxSubtasks = 5
+	}
+
+	// Workspace defaults.
+	if cfg.Workspace.Limits.MaxSizeMB == 0 {
+		cfg.Workspace.Limits.MaxSizeMB = 1024 // 1GB default
+	}
+	if cfg.Workspace.Limits.MinFreeDiskMB == 0 {
+		cfg.Workspace.Limits.MinFreeDiskMB = 2048 // 2GB default
+	}
+	if cfg.Workspace.Cleanup.MaxConcurrent == 0 {
+		cfg.Workspace.Cleanup.MaxConcurrent = 5
+	}
+	if cfg.Workspace.Cleanup.SuccessRetention == 0 {
+		cfg.Workspace.Cleanup.SuccessRetention = 24 * time.Hour
+	}
+	if cfg.Workspace.Cleanup.FailureRetention == 0 {
+		cfg.Workspace.Cleanup.FailureRetention = 168 * time.Hour // 1 week
+	}
+	if cfg.Workspace.Monitoring.DiskCheckInterval == 0 {
+		cfg.Workspace.Monitoring.DiskCheckInterval = 5 * time.Minute
+	}
+	if cfg.Workspace.Monitoring.CleanupInterval == 0 {
+		cfg.Workspace.Monitoring.CleanupInterval = 1 * time.Hour
 	}
 
 	return errors.Join(errs...)

@@ -35,10 +35,19 @@ type Agent interface {
 
 // StatusReport describes the current state of an agent.
 type StatusReport struct {
-	Type    AgentType `json:"type"`
-	State   string    `json:"state"`
-	IssueID int       `json:"issue_id,omitempty"`
-	Message string    `json:"message"`
+	Type              AgentType     `json:"type"`
+	State             string        `json:"state"`
+	IssueID           int           `json:"issue_id,omitempty"`
+	Message           string        `json:"message"`
+	WorkspaceStats    *WorkspaceStats `json:"workspace_stats,omitempty"`
+}
+
+// WorkspaceStats represents workspace usage statistics for the status report.
+type WorkspaceStats struct {
+	TotalWorkspaces  int   `json:"total_workspaces"`
+	ActiveWorkspaces int   `json:"active_workspaces"`
+	TotalSizeMB      int64 `json:"total_size_mb"`
+	DiskFreeMB       int64 `json:"disk_free_mb"`
 }
 
 // Dependencies holds shared dependencies injected into agents.

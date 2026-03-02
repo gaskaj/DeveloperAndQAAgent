@@ -16,6 +16,7 @@ import (
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/gitops"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/workspace"
 	"github.com/google/go-github/v68/github"
 )
 
@@ -94,6 +95,21 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 	ctx = observability.WithWorkflowStage(ctx, observability.WorkflowStage("workspace"))
 	d.updateStatus(state.StateWorkspace, issueNum, "setting up workspace")
 	
+	// Ensure workspace cleanup on exit
+	var workspaceCreated bool
+	defer func() {
+		if workspaceCreated {
+			// Mark workspace as stale on normal completion, failed on error
+			newState := workspace.WorkspaceStateStale
+			if ws.State == state.StateFailed {
+				newState = workspace.WorkspaceStateFailed
+			}
+			if err := d.workspaceManager.UpdateWorkspaceState(context.Background(), issueNum, newState); err != nil {
+				d.logger().Error("failed to update workspace state on exit", "issue", issueNum, "error", err)
+			}
+		}
+	}()
+	
 	// Check for context cancellation before workspace setup
 	if ctx.Err() != nil {
 		d.logger().Info("context cancelled during workspace setup", "issue", issueNum)
@@ -105,18 +121,25 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 		d.Deps.StructuredLogger.LogWorkflowTransition(ctx, issueNum, "claim", "workspace", "setup_development_environment")
 	}
 	
+	// Create managed workspace
+	managedWorkspace, err := d.workspaceManager.CreateWorkspace(ctx, issueNum)
+	if err != nil {
+		d.failIssue(ctx, ws, fmt.Errorf("creating managed workspace: %w", err))
+		return err
+	}
+	workspaceCreated = true
+	
 	branchName := fmt.Sprintf("agent/issue-%d", issueNum)
 	ws.BranchName = branchName
 	ws.State = state.StateWorkspace
 	ws.UpdatedAt = time.Now()
+	ws.WorkspaceDir = managedWorkspace.Path
 	_ = d.Deps.Store.Save(ctx, ws)
 
 	repoURL := fmt.Sprintf("https://github.com/%s/%s.git",
 		d.Deps.Config.GitHub.Owner, d.Deps.Config.GitHub.Repo)
-	workDir := fmt.Sprintf("%s/issue-%d", d.Deps.Config.Agents.Developer.WorkspaceDir, issueNum)
-	ws.WorkspaceDir = workDir
 
-	repo, err := gitops.Clone(repoURL, workDir, d.Deps.Config.GitHub.Token)
+	repo, err := gitops.Clone(repoURL, managedWorkspace.Path, d.Deps.Config.GitHub.Token)
 	if err != nil {
 		d.failIssue(ctx, ws, fmt.Errorf("cloning repo: %w", err))
 		return err
@@ -126,10 +149,16 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 		d.failIssue(ctx, ws, fmt.Errorf("creating branch: %w", err))
 		return err
 	}
+	
+	// Validate workspace size after clone
+	if err := d.validateWorkspaceSize(ctx, managedWorkspace.Path); err != nil {
+		d.failIssue(ctx, ws, fmt.Errorf("workspace size validation failed: %w", err))
+		return err
+	}
 
 	// Create workspace checkpoint
 	if err := checkpointer.CreateCheckpoint(ctx, ws, "workspace", map[string]interface{}{
-		"workspace_dir": workDir,
+		"workspace_dir": managedWorkspace.Path,
 		"branch_name":   branchName,
 		"repo_url":      repoURL,
 	}); err != nil {
@@ -384,6 +413,18 @@ func (d *DeveloperAgent) handleGracefulShutdown(ctx context.Context, ws *state.A
 		d.logger().Error("failed to create shutdown checkpoint", "error", err)
 	}
 	
+	// Clean up workspace on shutdown if in early stages
+	if shouldCleanupWorkspaceOnShutdown(ws.State) {
+		if err := d.workspaceManager.CleanupWorkspace(context.Background(), ws.IssueNumber); err != nil {
+			d.logger().Error("failed to cleanup workspace on shutdown", "issue", ws.IssueNumber, "error", err)
+		}
+	} else {
+		// Mark workspace as stale for later cleanup
+		if err := d.workspaceManager.UpdateWorkspaceState(context.Background(), ws.IssueNumber, workspace.WorkspaceStateStale); err != nil {
+			d.logger().Error("failed to mark workspace as stale on shutdown", "issue", ws.IssueNumber, "error", err)
+		}
+	}
+	
 	// Reset issue to ready state if we haven't made significant progress
 	if shouldResetOnShutdown(ws.State) {
 		if err := d.resetIssueToReady(ctx, ws.IssueNumber); err != nil {
@@ -397,6 +438,53 @@ func (d *DeveloperAgent) handleGracefulShutdown(ctx context.Context, ws *state.A
 	}
 	
 	return ctx.Err()
+}
+
+// shouldCleanupWorkspaceOnShutdown determines if workspace should be cleaned up immediately on shutdown
+func shouldCleanupWorkspaceOnShutdown(currentState state.State) bool {
+	switch currentState {
+	case state.StateClaim, state.StateWorkspace:
+		return true // Very early states - clean up immediately
+	default:
+		return false // Later states - mark as stale for scheduled cleanup
+	}
+}
+
+// validateWorkspaceSize checks if the workspace size is within limits
+func (d *DeveloperAgent) validateWorkspaceSize(ctx context.Context, workspacePath string) error {
+	// Calculate workspace size
+	var size int64
+	err := filepath.Walk(workspacePath, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("calculating workspace size: %w", err)
+	}
+
+	sizeMB := size / (1024 * 1024)
+	maxSizeMB := d.Deps.Config.Workspace.Limits.MaxSizeMB
+	if maxSizeMB == 0 {
+		maxSizeMB = workspace.DefaultConfig().MaxSizeMB
+	}
+
+	if sizeMB > maxSizeMB {
+		return fmt.Errorf("workspace size %d MB exceeds limit %d MB", sizeMB, maxSizeMB)
+	}
+
+	d.logger().Debug("workspace size validation passed",
+		"path", workspacePath,
+		"size_mb", sizeMB,
+		"max_size_mb", maxSizeMB,
+	)
+
+	return nil
 }
 
 // shouldResetOnShutdown determines if an issue should be reset to ready state on shutdown
