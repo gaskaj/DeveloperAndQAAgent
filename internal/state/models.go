@@ -44,3 +44,18 @@ type AgentWorkState struct {
 	CheckpointMetadata  map[string]interface{} `json:"checkpoint_metadata,omitempty"`
 	InterruptedBy       string                 `json:"interrupted_by,omitempty"`
 }
+
+// ValidationReport contains the results of a state consistency validation.
+// (Defined in validator.go but referenced here for completeness)
+
+// OrphanedWorkItem represents work that has been abandoned or is inconsistent.
+// (Defined in validator.go but referenced here for completeness)
+
+// ValidationIssue represents a specific consistency problem found during validation.
+// (Defined in validator.go but referenced here for completeness)
+
+// StateDrift represents inconsistency between local state and external systems.
+// (Defined in validator.go but referenced here for completeness)
+
+// RecommendedAction represents an action that should be taken to resolve inconsistencies.
+// (Defined in validator.go but referenced here for completeness)

@@ -48,9 +48,10 @@ type AgentsConfig struct {
 
 // DeveloperAgentConfig holds developer agent settings.
 type DeveloperAgentConfig struct {
-	Enabled       bool   `mapstructure:"enabled"`
-	MaxConcurrent int    `mapstructure:"max_concurrent"`
-	WorkspaceDir  string `mapstructure:"workspace_dir"`
+	Enabled       bool          `mapstructure:"enabled"`
+	MaxConcurrent int           `mapstructure:"max_concurrent"`
+	WorkspaceDir  string        `mapstructure:"workspace_dir"`
+	Recovery      RecoveryConfig `mapstructure:"recovery"`
 }
 
 // StateConfig holds state storage configuration.
@@ -286,6 +287,23 @@ type WorkspaceLimitsConfig struct {
 type WorkspaceMonitoringConfig struct {
 	DiskCheckInterval time.Duration `mapstructure:"disk_check_interval"`
 	CleanupInterval   time.Duration `mapstructure:"cleanup_interval"`
+}
+
+// RecoveryConfig holds configuration for recovery operations.
+type RecoveryConfig struct {
+	Enabled               bool              `mapstructure:"enabled"`
+	StartupValidation     bool              `mapstructure:"startup_validation"`
+	AutoCleanupOrphaned   bool              `mapstructure:"auto_cleanup_orphaned"`
+	MaxResumeAge          time.Duration     `mapstructure:"max_resume_age"`
+	ValidationInterval    time.Duration     `mapstructure:"validation_interval"`
+	Consistency           ConsistencyConfig `mapstructure:"consistency"`
+}
+
+// ConsistencyConfig holds configuration for consistency validation.
+type ConsistencyConfig struct {
+	ValidateOnStartup    bool `mapstructure:"validate_on_startup"`
+	ValidatePeriodically bool `mapstructure:"validate_periodically"`
+	ReconcileDrift       bool `mapstructure:"reconcile_drift"`
 }
 
 // Load reads configuration from the given file path, expanding environment variables.
