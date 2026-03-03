@@ -1,4 +1,4 @@
-.PHONY: build test test-unit test-integration test-all test-cover test-race lint run clean fmt vet docker-test docker-test-performance docker-test-race
+.PHONY: build test test-unit test-integration test-all test-cover test-race lint run clean fmt vet docker-test docker-test-performance docker-test-race coverage coverage-unit coverage-integration coverage-report coverage-badge coverage-analyze coverage-gates
 
 BINARY := agentctl
 PKG := ./...
@@ -81,25 +81,112 @@ run: build
 
 clean:
 	rm -rf bin/ coverage.out coverage.html integration-coverage.out integration-coverage.html
+	rm -rf coverage-unit.out coverage-integration.out coverage-combined.out coverage-func.txt
+	rm -rf coverage-report.md coverage-badge.svg coverage-badge-info.txt package-coverage-report.md
+	rm -rf coverage-reports/ coverage-badge.md
 	rm -rf /tmp/test-workspaces /tmp/test-state /tmp/race-workspaces /tmp/race-state /tmp/perf-workspaces /tmp/perf-state
 	docker compose -f docker-compose.test.yml down -v --remove-orphans || true
+
+# Comprehensive coverage targets
+coverage: coverage-unit coverage-integration coverage-report coverage-badge
+	@echo "Complete coverage analysis finished"
+
+coverage-unit:
+	@echo "Running unit tests with coverage..."
+	@mkdir -p coverage-reports
+	go test -short -race -coverprofile=coverage-unit.out -covermode=atomic ./internal/...
+
+coverage-integration:
+	@echo "Running integration tests with coverage..."
+	@mkdir -p /tmp/test-workspaces /tmp/test-state coverage-reports
+	INTEGRATION_TEST_MODE=true TEST_WORKSPACE_DIR=/tmp/test-workspaces TEST_STATE_DIR=/tmp/test-state \
+		go test -race -coverprofile=coverage-integration.out -covermode=atomic -timeout=30m ./internal/integration/... || \
+		(echo "mode: atomic" > coverage-integration.out && echo "No integration tests or tests failed")
+
+coverage-combine:
+	@echo "Combining coverage profiles..."
+	@echo "mode: atomic" > coverage-combined.out
+	@if [ -f coverage-unit.out ]; then tail -n +2 coverage-unit.out >> coverage-combined.out; fi
+	@if [ -f coverage-integration.out ] && [ -s coverage-integration.out ]; then tail -n +2 coverage-integration.out >> coverage-combined.out; fi
+
+coverage-html: coverage-combine
+	@echo "Generating HTML coverage report..."
+	go tool cover -html=coverage-combined.out -o coverage.html
+	@echo "HTML coverage report: coverage.html"
+
+coverage-func: coverage-combine
+	@echo "Generating function coverage report..."
+	go tool cover -func=coverage-combined.out > coverage-func.txt
+	go tool cover -func=coverage-combined.out
+
+coverage-report: coverage-html coverage-func
+	@echo "Generating detailed coverage analysis..."
+	@if [ -f scripts/coverage-report.go ]; then \
+		go run scripts/coverage-report.go -profile=coverage-combined.out -format=markdown -output=coverage-report.md -verbose; \
+	fi
+
+coverage-badge: coverage-combine
+	@echo "Generating coverage badge..."
+	@if [ -x scripts/generate-coverage-badge.sh ]; then \
+		./scripts/generate-coverage-badge.sh coverage-combined.out coverage-badge.svg README.md; \
+	fi
+
+coverage-analyze: coverage-combine
+	@echo "Analyzing coverage against quality gates..."
+	@if [ -f scripts/coverage-report.go ]; then \
+		go run scripts/coverage-report.go -profile=coverage-combined.out -check-gates -verbose; \
+	fi
+
+coverage-gates: coverage-analyze
+	@echo "Running quality gate validation..."
+	@if [ -x scripts/coverage.sh ]; then \
+		./scripts/coverage.sh analyze; \
+	fi
+
+# Enhanced test coverage with full analysis
+test-coverage: coverage coverage-gates
+	@echo "Complete test coverage analysis with quality gates"
 
 # Help target
 help:
 	@echo "Available targets:"
+	@echo ""
+	@echo "Build and Run:"
 	@echo "  build                    - Build the binary"
+	@echo "  run                      - Build and run with example config"
+	@echo ""
+	@echo "Testing:"
 	@echo "  test                     - Run unit tests (default)"
 	@echo "  test-unit                - Run unit tests only"  
 	@echo "  test-integration         - Run integration tests only"
 	@echo "  test-all                 - Run all tests (unit + integration)"
 	@echo "  test-race                - Run race condition detection tests"
-	@echo "  test-cover               - Run all tests with coverage"
-	@echo "  test-integration-cover   - Run integration tests with coverage"
+	@echo "  test-cover               - Run all tests with coverage (legacy)"
+	@echo "  test-integration-cover   - Run integration tests with coverage (legacy)"
+	@echo ""
+	@echo "Coverage Analysis:"
+	@echo "  coverage                 - Complete coverage analysis (unit + integration + reports)"
+	@echo "  coverage-unit            - Run unit tests with coverage"
+	@echo "  coverage-integration     - Run integration tests with coverage"
+	@echo "  coverage-combine         - Combine coverage profiles"
+	@echo "  coverage-html            - Generate HTML coverage report"
+	@echo "  coverage-func            - Generate function-level coverage report"
+	@echo "  coverage-report          - Generate detailed coverage analysis"
+	@echo "  coverage-badge           - Generate coverage badge for README"
+	@echo "  coverage-analyze         - Analyze coverage against thresholds"
+	@echo "  coverage-gates           - Run quality gate validation"
+	@echo "  test-coverage            - Complete coverage analysis with quality gates"
+	@echo ""
+	@echo "Docker Testing:"
 	@echo "  docker-test              - Run integration tests in Docker"
 	@echo "  docker-test-performance  - Run performance tests in Docker"
 	@echo "  docker-test-race         - Run race condition tests in Docker"
 	@echo "  docker-test-all          - Run all Docker test suites"
+	@echo ""
+	@echo "Code Quality:"
 	@echo "  lint                     - Run linter"
 	@echo "  fmt                      - Format code"
-	@echo "  run                      - Build and run with example config"
+	@echo "  vet                      - Run go vet"
+	@echo ""
+	@echo "Maintenance:"
 	@echo "  clean                    - Clean build artifacts and test directories"

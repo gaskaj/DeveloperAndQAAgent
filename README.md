@@ -1,5 +1,8 @@
 # DeveloperAndQAAgent
 
+![Coverage](https://img.shields.io/badge/coverage-49.0%25-red)
+
+
 An autonomous development agent framework that uses **GitHub as its source of truth** and **Claude as its AI engine**.
 
 ## Overview

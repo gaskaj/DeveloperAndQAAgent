@@ -89,6 +89,77 @@ assert.Equal(t, expected, actual)
 require.NotNil(t, result)  // stops test on failure
 ```
 
+### Coverage Standards
+
+All code must meet minimum coverage thresholds:
+
+| Package Type | Minimum Coverage |
+|--------------|------------------|
+| Critical (`claude`, `ghub`, `developer`) | 85% |
+| Infrastructure (`config`, `state`, `workspace`) | 80% |
+| Utility (`errors`, `observability`) | 75% |
+| Default | 70% |
+
+### Coverage Best Practices
+
+- **Test both success and error paths**
+- **Cover all public functions and methods**
+- **Test critical state transitions**
+- **Include edge cases and boundary conditions**
+- **Use table-driven tests for multiple scenarios**
+
+```go
+func TestWorkflowTransition(t *testing.T) {
+    tests := []struct {
+        name          string
+        currentState  State
+        event         Event
+        expectedState State
+        shouldError   bool
+    }{
+        {
+            name:          "valid transition",
+            currentState:  StateIdle,
+            event:         EventClaim,
+            expectedState: StateClaim,
+            shouldError:   false,
+        },
+        {
+            name:          "invalid transition",
+            currentState:  StateIdle,
+            event:         EventCommit,
+            expectedState: StateIdle,
+            shouldError:   true,
+        },
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            workflow := NewWorkflow()
+            workflow.SetState(tt.currentState)
+            
+            err := workflow.ProcessEvent(tt.event)
+            
+            if tt.shouldError {
+                assert.Error(t, err)
+                assert.Equal(t, tt.currentState, workflow.State())
+            } else {
+                assert.NoError(t, err)
+                assert.Equal(t, tt.expectedState, workflow.State())
+            }
+        })
+    }
+}
+```
+
+### Critical Path Testing
+
+These code paths require 100% coverage:
+- Error handling and retry logic
+- State machine transitions
+- API error responses
+- Data persistence and recovery
+
 ### Mocks
 
 Test doubles are defined alongside interfaces or in test files. The `ghub` tests use mock implementations of `Client`. The `creativity` package defines `GitHubClient` and `AIClient` interfaces with adapter types for testing.
@@ -145,13 +216,39 @@ The `agent.Dependencies` struct bundles all shared dependencies. This avoids glo
 
 ## Makefile Targets
 
-| Target | Command | Description |
-|--------|---------|-------------|
-| `build` | `go build -o bin/agentctl ./cmd/agentctl` | Build binary |
-| `test` | `go test -race -count=1 ./...` | Run tests with race detector |
-| `test-cover` | `go test -race -coverprofile=coverage.out ./...` | Generate coverage report |
-| `lint` | `golangci-lint run ./...` | Run linter (requires `golangci-lint`) |
-| `vet` | `go vet ./...` | Run go vet |
-| `fmt` | `gofmt -s -w .` | Format all Go files |
-| `run` | Build then `./bin/agentctl start --config configs/config.example.yaml` | Build and run |
-| `clean` | `rm -rf bin/ coverage.out coverage.html` | Remove build artifacts |
+### Core Development
+
+| Target | Description |
+|--------|-------------|
+| `build` | Build the binary |
+| `test` | Run unit tests with race detector |
+| `lint` | Run linter (requires `golangci-lint`) |
+| `fmt` | Format all Go files |
+| `run` | Build and run with example config |
+| `clean` | Remove build artifacts and coverage files |
+
+### Coverage Analysis
+
+| Target | Description |
+|--------|-------------|
+| `coverage` | Complete coverage analysis (unit + integration + reports) |
+| `coverage-unit` | Run unit tests with coverage |
+| `coverage-integration` | Run integration tests with coverage |
+| `coverage-html` | Generate HTML coverage report |
+| `coverage-report` | Generate detailed coverage analysis |
+| `coverage-badge` | Generate coverage badge for README |
+| `coverage-gates` | Run quality gate validation |
+| `test-coverage` | Complete coverage analysis with quality gates |
+
+### Example Usage
+
+```bash
+# Before committing
+make fmt lint test
+
+# Full development cycle
+make coverage
+
+# Check if your changes meet quality gates
+make coverage-gates
+```

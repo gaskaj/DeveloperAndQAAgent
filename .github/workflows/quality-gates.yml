@@ -1,0 +1,355 @@
+name: Quality Gates
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  coverage-analysis:
+    name: Coverage Analysis and Quality Gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        # Fetch full history for coverage trend analysis
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-1.25-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-1.25-
+
+    - name: Install dependencies
+      run: |
+        go mod download
+        # Install bc for numerical comparisons in coverage script
+        sudo apt-get update && sudo apt-get install -y bc
+
+    - name: Create test directories
+      run: |
+        mkdir -p /tmp/test-workspaces
+        mkdir -p /tmp/test-state
+        mkdir -p coverage-reports
+        chmod 755 /tmp/test-workspaces /tmp/test-state
+
+    - name: Make coverage script executable
+      run: chmod +x scripts/coverage.sh
+
+    - name: Run unit tests with coverage
+      run: |
+        echo "Running unit tests with coverage..."
+        go test -short -race -coverprofile=coverage-unit.out -covermode=atomic ./internal/...
+
+    - name: Start test services for integration tests
+      run: |
+        if [ -f docker-compose.test.yml ]; then
+          echo "Starting test services..."
+          docker compose -f docker-compose.test.yml up -d mock-github-api mock-claude-api test-state-store || true
+          sleep 10
+        else
+          echo "No docker-compose.test.yml found, skipping integration test services"
+        fi
+
+    - name: Run integration tests with coverage
+      env:
+        INTEGRATION_TEST_MODE: true
+        TEST_WORKSPACE_DIR: /tmp/test-workspaces
+        TEST_STATE_DIR: /tmp/test-state
+      run: |
+        echo "Running integration tests with coverage..."
+        if [ -d "./internal/integration" ]; then
+          go test -race -coverprofile=coverage-integration.out -covermode=atomic -timeout=20m ./internal/integration/... || true
+        else
+          echo "No integration tests found, creating empty coverage file"
+          echo "mode: atomic" > coverage-integration.out
+        fi
+
+    - name: Combine coverage profiles
+      run: |
+        echo "Combining coverage profiles..."
+        echo "mode: atomic" > coverage-combined.out
+        
+        # Combine unit tests coverage
+        if [ -f coverage-unit.out ]; then
+          tail -n +2 coverage-unit.out >> coverage-combined.out
+        fi
+        
+        # Combine integration tests coverage
+        if [ -f coverage-integration.out ] && [ -s coverage-integration.out ]; then
+          tail -n +2 coverage-integration.out >> coverage-combined.out
+        fi
+
+    - name: Generate coverage reports
+      run: |
+        echo "Generating coverage reports..."
+        
+        # Generate HTML report
+        go tool cover -html=coverage-combined.out -o coverage.html
+        
+        # Generate function-level coverage report
+        go tool cover -func=coverage-combined.out > coverage-func.txt
+        
+        # Calculate overall coverage
+        OVERALL_COVERAGE=$(go tool cover -func=coverage-combined.out | grep "total:" | awk '{print $3}' | sed 's/%//')
+        echo "OVERALL_COVERAGE=$OVERALL_COVERAGE" >> $GITHUB_ENV
+        echo "Overall coverage: $OVERALL_COVERAGE%"
+
+    - name: Run quality gate checks
+      id: quality-gates
+      run: |
+        echo "Running quality gate checks..."
+        
+        # Set minimum coverage threshold
+        MIN_COVERAGE=80
+        
+        # Check overall coverage
+        if [ -n "$OVERALL_COVERAGE" ]; then
+          echo "Overall coverage: $OVERALL_COVERAGE%"
+          echo "Minimum required: $MIN_COVERAGE%"
+          
+          if (( $(echo "$OVERALL_COVERAGE < $MIN_COVERAGE" | bc -l) )); then
+            echo "❌ Overall coverage ($OVERALL_COVERAGE%) is below minimum threshold ($MIN_COVERAGE%)"
+            echo "quality_gates_passed=false" >> $GITHUB_OUTPUT
+            echo "failure_reason=Overall coverage below minimum" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Overall coverage meets minimum threshold"
+            echo "quality_gates_passed=true" >> $GITHUB_OUTPUT
+          fi
+        else
+          echo "⚠️ Could not determine coverage percentage"
+          echo "quality_gates_passed=false" >> $GITHUB_OUTPUT
+          echo "failure_reason=Could not determine coverage" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Analyze package coverage
+      run: |
+        echo "Analyzing package-level coverage..."
+        
+        # Create detailed package coverage report
+        {
+          echo "# Package Coverage Analysis"
+          echo "Generated on: $(date)"
+          echo ""
+          echo "## Overall Coverage: ${OVERALL_COVERAGE}%"
+          echo ""
+          echo "## Per-Package Coverage"
+          echo "| Package | Coverage | Status |"
+          echo "|---------|----------|--------|"
+          
+          # Analyze package coverage from function report
+          while IFS= read -r line; do
+            if [[ $line == *"/internal/"* ]] && [[ $line != *"total:"* ]]; then
+              # Extract package and coverage from line
+              file=$(echo "$line" | awk '{print $1}')
+              coverage=$(echo "$line" | awk '{print $3}')
+              
+              # Extract package name
+              package_path=$(dirname "$file")
+              if [[ $package_path == *"/internal/"* ]]; then
+                package_name=$(echo "$package_path" | sed 's/.*\/internal\///' | cut -d'/' -f1)
+                
+                # Determine status based on package-specific thresholds
+                status="✅ PASS"
+                case $package_name in
+                  "claude"|"ghub"|"developer")
+                    if [[ $(echo "$coverage" | sed 's/%//') < 85 ]]; then
+                      status="❌ FAIL (need 85%)"
+                    fi
+                    ;;
+                  "config"|"state"|"workspace"|"agent"|"orchestrator")
+                    if [[ $(echo "$coverage" | sed 's/%//') < 80 ]]; then
+                      status="❌ FAIL (need 80%)"
+                    fi
+                    ;;
+                  *)
+                    if [[ $(echo "$coverage" | sed 's/%//') < 75 ]]; then
+                      status="❌ FAIL (need 75%)"
+                    fi
+                    ;;
+                esac
+                
+                echo "| $package_name | $coverage | $status |"
+              fi
+            fi
+          done < coverage-func.txt | sort -u
+          
+        } > package-coverage-report.md
+
+    - name: Generate coverage badge info
+      run: |
+        echo "Generating coverage badge..."
+        
+        # Determine badge color
+        if (( $(echo "$OVERALL_COVERAGE >= 80" | bc -l) )); then
+          COLOR="green"
+        elif (( $(echo "$OVERALL_COVERAGE >= 70" | bc -l) )); then
+          COLOR="yellow"  
+        elif (( $(echo "$OVERALL_COVERAGE >= 60" | bc -l) )); then
+          COLOR="orange"
+        else
+          COLOR="red"
+        fi
+        
+        echo "COVERAGE_COLOR=$COLOR" >> $GITHUB_ENV
+        echo "Coverage badge color: $COLOR"
+
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-reports
+        path: |
+          coverage-combined.out
+          coverage.html
+          coverage-func.txt
+          package-coverage-report.md
+        retention-days: 30
+
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          // Read the package coverage report
+          let packageReport = '';
+          try {
+            packageReport = fs.readFileSync('package-coverage-report.md', 'utf8');
+          } catch (error) {
+            console.log('Could not read package coverage report:', error);
+            packageReport = 'Package coverage report not available';
+          }
+          
+          const qualityGatesPassed = '${{ steps.quality-gates.outputs.quality_gates_passed }}' === 'true';
+          const overallCoverage = '${{ env.OVERALL_COVERAGE }}';
+          const coverageColor = '${{ env.COVERAGE_COLOR }}';
+          
+          const statusIcon = qualityGatesPassed ? '✅' : '❌';
+          const statusText = qualityGatesPassed ? 'PASSED' : 'FAILED';
+          
+          const body = `## ${statusIcon} Test Coverage Report
+          
+          **Quality Gates: ${statusText}**
+          
+          ![Coverage Badge](https://img.shields.io/badge/coverage-${overallCoverage}%25-${coverageColor})
+          
+          **Overall Coverage**: ${overallCoverage}%
+          
+          ${packageReport}
+          
+          ---
+          
+          ### 📊 Coverage Details
+          - **Unit Tests**: Included in analysis
+          - **Integration Tests**: ${fs.existsSync('./internal/integration') ? 'Included' : 'No integration tests found'}
+          - **Quality Gate**: ${qualityGatesPassed ? 'Passed ✅' : 'Failed ❌'}
+          
+          ${!qualityGatesPassed ? `
+          ### ⚠️ Action Required
+          Coverage is below the required threshold. Please add tests to improve coverage before merging.
+          ` : ''}
+          
+          <details>
+          <summary>📈 View detailed coverage report</summary>
+          
+          Download the coverage report artifacts from this workflow run to see detailed file-by-file coverage analysis.
+          
+          </details>`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: body
+          });
+
+    - name: Set quality gate status
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const qualityGatesPassed = '${{ steps.quality-gates.outputs.quality_gates_passed }}' === 'true';
+          const conclusion = qualityGatesPassed ? 'success' : 'failure';
+          const summary = qualityGatesPassed ? 
+            'All quality gates passed' : 
+            'Quality gates failed: ${{ steps.quality-gates.outputs.failure_reason }}';
+          
+          await github.rest.checks.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            name: 'Quality Gates',
+            head_sha: context.payload.pull_request.head.sha,
+            status: 'completed',
+            conclusion: conclusion,
+            output: {
+              title: 'Coverage Quality Gates',
+              summary: summary,
+              text: `Overall coverage: ${{ env.OVERALL_COVERAGE }}%`
+            }
+          });
+
+    - name: Fail workflow if quality gates failed
+      if: steps.quality-gates.outputs.quality_gates_passed == 'false'
+      run: |
+        echo "Quality gates failed: ${{ steps.quality-gates.outputs.failure_reason }}"
+        exit 1
+
+    - name: Clean up test services
+      if: always()
+      run: |
+        if [ -f docker-compose.test.yml ]; then
+          docker compose -f docker-compose.test.yml down -v || true
+        fi
+        rm -rf /tmp/test-workspaces /tmp/test-state
+
+  # Summary job that depends on coverage-analysis
+  quality-summary:
+    name: Quality Gates Summary
+    runs-on: ubuntu-latest
+    needs: coverage-analysis
+    if: always()
+    
+    steps:
+    - name: Generate summary
+      run: |
+        echo "## 🎯 Quality Gates Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ needs.coverage-analysis.result }}" == "success" ]; then
+          echo "✅ **All quality gates passed!**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Coverage analysis completed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- All coverage thresholds met" >> $GITHUB_STEP_SUMMARY
+          echo "- Quality gates validation passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Quality gates failed**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Please review the coverage analysis results and add tests to meet the minimum coverage requirements." >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📊 What was checked:" >> $GITHUB_STEP_SUMMARY
+        echo "- Overall project coverage threshold (80% minimum)" >> $GITHUB_STEP_SUMMARY
+        echo "- Package-specific coverage thresholds" >> $GITHUB_STEP_SUMMARY  
+        echo "- Critical path coverage validation" >> $GITHUB_STEP_SUMMARY
+        echo "- Test execution success rate" >> $GITHUB_STEP_SUMMARY

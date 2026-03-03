@@ -154,6 +154,49 @@ The repo clone is cached across creativity loop iterations via `ensureRepo()` â€
 
 See [configuration.md](configuration.md) for creativity settings.
 
+## Test Coverage Requirements
+
+All code changes must meet coverage quality gates before merging:
+
+### Coverage Thresholds
+
+**Critical Packages** (85% minimum):
+- `claude/` - Claude API integration
+- `ghub/` - GitHub operations
+- `developer/` - Core workflow logic
+
+**Infrastructure Packages** (80% minimum):
+- `config/`, `state/`, `workspace/`, `agent/`, `orchestrator/`
+
+**Utility Packages** (75% minimum):
+- `errors/`, `observability/`, `creativity/`, `gitops/`
+
+### Coverage Commands
+
+```bash
+# Full coverage analysis
+make coverage
+
+# Unit test coverage only
+make coverage-unit
+
+# Check quality gates
+make coverage-gates
+
+# Generate coverage badge
+make coverage-badge
+```
+
+### Quality Gates
+
+The automated quality gates enforce:
+- Overall project coverage â‰¥ 80%
+- Package-specific threshold compliance
+- Critical path coverage validation
+- No coverage regression > 2%
+
+See [test-coverage.md](test-coverage.md) and [quality-assurance.md](quality-assurance.md) for detailed coverage requirements.
+
 ## Self-Building Bootstrap
 
 The agent can improve its own codebase. When a human creates an issue describing a feature or fix for the agent itself and labels it `agent:ready`, the agent:

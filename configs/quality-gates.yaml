@@ -1,0 +1,112 @@
+# Quality Gates Configuration
+# This file defines the coverage thresholds and quality requirements for the project
+
+coverage:
+  # Overall project minimum coverage percentage
+  overall_minimum: 80
+
+  # Package-specific minimum coverage thresholds
+  # Critical packages require higher coverage due to their importance
+  package_thresholds:
+    # Core business logic - highest coverage requirements
+    claude: 85       # Claude API integration and conversation management
+    ghub: 85         # GitHub API client and operations  
+    developer: 85    # Developer agent workflow and state management
+
+    # Infrastructure packages - high coverage requirements
+    config: 80       # Configuration management and validation
+    state: 80        # State persistence and recovery
+    workspace: 80    # Workspace management and file operations
+    agent: 80        # Agent lifecycle and coordination
+    orchestrator: 80 # System orchestration and health management
+
+    # Utility packages - moderate coverage requirements  
+    errors: 75       # Error handling and retry logic
+    observability: 75 # Logging, metrics, and monitoring
+    creativity: 75   # Creative suggestion and context management
+    gitops: 75       # Git operations and repository management
+
+  # Default threshold for packages not explicitly listed
+  default_minimum: 70
+
+# Quality gate rules
+quality_gates:
+  # Block merge if overall coverage drops below minimum
+  enforce_minimum_coverage: true
+  
+  # Block merge if any critical package falls below threshold
+  enforce_package_thresholds: true
+  
+  # Allow coverage to decrease by this percentage in a single PR
+  max_coverage_decrease: 2.0
+  
+  # Require test coverage for new code
+  require_new_code_coverage: true
+  new_code_minimum: 80
+
+  # Critical paths that must have test coverage
+  critical_paths:
+    - "internal/developer/workflow.go"      # Core workflow state machine
+    - "internal/claude/conversation.go"     # Claude API conversation management
+    - "internal/ghub/client.go"             # GitHub API client
+    - "internal/state/filestore.go"         # State persistence
+    - "internal/errors/retry.go"            # Retry logic
+    - "internal/agent/lifecycle.go"         # Agent lifecycle management
+    - "internal/workspace/manager.go"       # Workspace management
+
+# Test requirements
+test_requirements:
+  # Require unit tests for all public functions
+  require_unit_tests: true
+  
+  # Require integration tests for API clients
+  require_integration_tests:
+    - claude
+    - ghub
+    
+  # Require race condition tests for concurrent code
+  require_race_tests:
+    - state
+    - workspace
+    - agent
+    - developer
+
+# Reporting configuration
+reporting:
+  # Generate detailed coverage reports
+  generate_html_report: true
+  
+  # Include coverage in PR comments
+  pr_coverage_comment: true
+  
+  # Generate coverage badges
+  generate_badges: true
+  
+  # Archive coverage reports as CI artifacts
+  archive_reports: true
+  
+  # Coverage trend analysis
+  track_coverage_trends: true
+
+# Exemptions (use sparingly and document reasons)
+exemptions:
+  # Files exempt from coverage requirements
+  excluded_files:
+    - "internal/integration/mock_services.go"  # Test utilities
+    - "internal/*/testdata/*"                  # Test data files
+    - "*_generated.go"                         # Generated code
+    
+  # Packages with relaxed requirements (document reasons)
+  relaxed_packages: []
+
+# Performance requirements
+performance:
+  # Maximum test execution time
+  max_test_duration: "30m"
+  
+  # Maximum coverage analysis time  
+  max_coverage_analysis: "5m"
+  
+  # Parallel test execution
+  enable_parallel_tests: true
+  max_parallel_packages: 4
