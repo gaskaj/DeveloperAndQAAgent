@@ -7,6 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
 )
 
 // WorkspaceState represents the current state of a workspace.
@@ -66,19 +69,29 @@ type Manager interface {
 	
 	// ListWorkspaces returns all workspaces matching the given criteria.
 	ListWorkspaces(ctx context.Context, state WorkspaceState) ([]*Workspace, error)
+
+	// CreateWorkspaceSnapshot creates a snapshot of the workspace state.
+	CreateWorkspaceSnapshot(ctx context.Context, issueID int, agentState *state.AgentWorkState) (*WorkspaceSnapshot, error)
+	
+	// RestoreWorkspaceSnapshot restores workspace from the latest snapshot.
+	RestoreWorkspaceSnapshot(ctx context.Context, issueID int) (*WorkspaceSnapshot, error)
+	
+	// GetWorkspaceSnapshots returns all snapshots for a workspace.
+	GetWorkspaceSnapshots(ctx context.Context, issueID int) ([]*WorkspaceSnapshot, error)
 }
 
 // ManagerConfig holds configuration for the workspace manager.
 type ManagerConfig struct {
-	BaseDir              string        `mapstructure:"base_dir"`
-	MaxSizeMB            int64         `mapstructure:"max_size_mb"`
-	MinFreeDiskMB        int64         `mapstructure:"min_free_disk_mb"`
-	MaxConcurrent        int           `mapstructure:"max_concurrent"`
-	SuccessRetention     time.Duration `mapstructure:"success_retention"`
-	FailureRetention     time.Duration `mapstructure:"failure_retention"`
-	DiskCheckInterval    time.Duration `mapstructure:"disk_check_interval"`
-	CleanupInterval      time.Duration `mapstructure:"cleanup_interval"`
-	CleanupEnabled       bool          `mapstructure:"cleanup_enabled"`
+	BaseDir              string              `mapstructure:"base_dir"`
+	MaxSizeMB            int64               `mapstructure:"max_size_mb"`
+	MinFreeDiskMB        int64               `mapstructure:"min_free_disk_mb"`
+	MaxConcurrent        int                 `mapstructure:"max_concurrent"`
+	SuccessRetention     time.Duration       `mapstructure:"success_retention"`
+	FailureRetention     time.Duration       `mapstructure:"failure_retention"`
+	DiskCheckInterval    time.Duration       `mapstructure:"disk_check_interval"`
+	CleanupInterval      time.Duration       `mapstructure:"cleanup_interval"`
+	CleanupEnabled       bool                `mapstructure:"cleanup_enabled"`
+	Persistence          config.PersistenceConfig   `mapstructure:"persistence"`
 }
 
 // DefaultConfig returns a sensible default configuration.
@@ -93,15 +106,25 @@ func DefaultConfig() ManagerConfig {
 		DiskCheckInterval:    5 * time.Minute,
 		CleanupInterval:      1 * time.Hour,
 		CleanupEnabled:       true,
+		Persistence:          config.PersistenceConfig{
+			Enabled:              true,
+			SnapshotInterval:     5 * time.Minute,
+			MaxSnapshots:         10,
+			RetentionHours:       72, // 3 days
+			CompressSnapshots:    true,
+			ResumeOnRestart:      true,
+			ValidateBeforeResume: true,
+		},
 	}
 }
 
 // managerImpl implements the Manager interface.
 type managerImpl struct {
-	config   ManagerConfig
-	logger   *slog.Logger
-	monitor  *Monitor
-	workspaces map[int]*Workspace // In-memory cache of workspace info
+	config      ManagerConfig
+	logger      *slog.Logger
+	monitor     *Monitor
+	workspaces  map[int]*Workspace // In-memory cache of workspace info
+	persistence *WorkspacePersistence
 }
 
 // NewManager creates a new workspace manager with the given configuration.
@@ -116,12 +139,14 @@ func NewManager(config ManagerConfig, logger *slog.Logger) (Manager, error) {
 	}
 
 	monitor := NewMonitor(config, logger)
+	persistence := NewWorkspacePersistence(config.Persistence, config.BaseDir, logger)
 
 	mgr := &managerImpl{
-		config:     config,
-		logger:     logger,
-		monitor:    monitor,
-		workspaces: make(map[int]*Workspace),
+		config:      config,
+		logger:      logger,
+		monitor:     monitor,
+		workspaces:  make(map[int]*Workspace),
+		persistence: persistence,
 	}
 
 	// Initialize workspace cache by scanning existing directories
@@ -447,4 +472,55 @@ func (m *managerImpl) calculateWorkspaceSize(path string) (int64, error) {
 	}
 
 	return size / (1024 * 1024), nil // Convert to MB
+}
+
+// CreateWorkspaceSnapshot creates a snapshot of the workspace state.
+func (m *managerImpl) CreateWorkspaceSnapshot(ctx context.Context, issueID int, agentState *state.AgentWorkState) (*WorkspaceSnapshot, error) {
+	workspace, exists := m.workspaces[issueID]
+	if !exists {
+		return nil, fmt.Errorf("workspace not found for issue %d", issueID)
+	}
+
+	snapshot, err := m.persistence.CreateSnapshot(ctx, workspace.Path, agentState)
+	if err != nil {
+		return nil, fmt.Errorf("creating workspace snapshot: %w", err)
+	}
+
+	if snapshot != nil {
+		m.logger.Info("workspace snapshot created",
+			"issue", issueID,
+			"snapshot_id", snapshot.ID,
+			"file_count", len(snapshot.FileStates),
+		)
+	}
+
+	return snapshot, nil
+}
+
+// RestoreWorkspaceSnapshot restores workspace from the latest snapshot.
+func (m *managerImpl) RestoreWorkspaceSnapshot(ctx context.Context, issueID int) (*WorkspaceSnapshot, error) {
+	snapshot, err := m.persistence.RestoreSnapshot(ctx, issueID)
+	if err != nil {
+		return nil, fmt.Errorf("restoring workspace snapshot: %w", err)
+	}
+
+	if snapshot != nil {
+		m.logger.Info("workspace snapshot restored",
+			"issue", issueID,
+			"snapshot_id", snapshot.ID,
+			"snapshot_age", time.Since(snapshot.Timestamp),
+		)
+	}
+
+	return snapshot, nil
+}
+
+// GetWorkspaceSnapshots returns all snapshots for a workspace.
+func (m *managerImpl) GetWorkspaceSnapshots(ctx context.Context, issueID int) ([]*WorkspaceSnapshot, error) {
+	snapshots, err := m.persistence.GetSnapshots(issueID)
+	if err != nil {
+		return nil, fmt.Errorf("getting workspace snapshots: %w", err)
+	}
+
+	return snapshots, nil
 }

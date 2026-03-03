@@ -62,6 +62,30 @@ agents:
     # Each issue gets its own workspace subdirectory
     # Example: "./workspaces/issue-123/"
     workspace_dir: "./workspaces"
+    
+    # Workspace persistence configuration
+    workspace:
+      persistence:
+        # Enable workspace persistence and recovery
+        enabled: true
+        
+        # Interval between automatic snapshots during long-running operations
+        snapshot_interval: "5m"
+        
+        # Maximum number of snapshots to retain per issue
+        max_snapshots: 10
+        
+        # Hours to retain snapshots before cleanup
+        retention_hours: 72
+        
+        # Compress snapshots to save disk space
+        compress_snapshots: true
+        
+        # Automatically attempt to resume from snapshots on restart
+        resume_on_restart: true
+        
+        # Validate snapshot integrity before attempting resume
+        validate_before_resume: true
 
 state:
   # State storage backend

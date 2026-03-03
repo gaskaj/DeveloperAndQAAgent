@@ -165,6 +165,15 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 		d.logger().Error("failed to create workspace checkpoint", "error", err)
 	}
 
+	// Create workspace snapshot after successful workspace setup
+	if snapshot, err := d.workspaceManager.CreateWorkspaceSnapshot(ctx, issueNum, ws); err != nil {
+		d.logger().Error("failed to create workspace snapshot", "error", err)
+	} else if snapshot != nil {
+		ws.LastSnapshotTime = time.Now()
+		ws.ImplementationHash = snapshot.ImplementationHash
+		_ = d.Deps.Store.Save(ctx, ws)
+	}
+
 	// Gather codebase context for Claude.
 	repoContext := gatherRepoContext(repo)
 
@@ -267,6 +276,15 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 	ws.UpdatedAt = time.Now()
 	_ = d.Deps.Store.Save(ctx, ws)
 
+	// Create snapshot before implementation begins
+	if snapshot, err := d.workspaceManager.CreateWorkspaceSnapshot(ctx, issueNum, ws); err != nil {
+		d.logger().Error("failed to create pre-implementation snapshot", "error", err)
+	} else if snapshot != nil {
+		ws.LastSnapshotTime = time.Now()
+		ws.ImplementationHash = snapshot.ImplementationHash
+		_ = d.Deps.Store.Save(ctx, ws)
+	}
+
 	implementStartTime := time.Now()
 	if err := d.implement(ctx, repo, issueContext, plan, repoContext); err != nil {
 		implementDuration := time.Since(implementStartTime)
@@ -321,6 +339,15 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 	ws.State = state.StateCommit
 	ws.UpdatedAt = time.Now()
 	_ = d.Deps.Store.Save(ctx, ws)
+
+	// Create snapshot after successful implementation
+	if snapshot, err := d.workspaceManager.CreateWorkspaceSnapshot(ctx, issueNum, ws); err != nil {
+		d.logger().Error("failed to create post-implementation snapshot", "error", err)
+	} else if snapshot != nil {
+		ws.LastSnapshotTime = time.Now()
+		ws.ImplementationHash = snapshot.ImplementationHash
+		_ = d.Deps.Store.Save(ctx, ws)
+	}
 
 	if err := repo.StageAll(); err != nil {
 		d.failIssue(ctx, ws, fmt.Errorf("staging: %w", err))

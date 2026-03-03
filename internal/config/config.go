@@ -49,10 +49,27 @@ type AgentsConfig struct {
 
 // DeveloperAgentConfig holds developer agent settings.
 type DeveloperAgentConfig struct {
-	Enabled       bool          `mapstructure:"enabled"`
-	MaxConcurrent int           `mapstructure:"max_concurrent"`
-	WorkspaceDir  string        `mapstructure:"workspace_dir"`
-	Recovery      RecoveryConfig `mapstructure:"recovery"`
+	Enabled       bool             `mapstructure:"enabled"`
+	MaxConcurrent int              `mapstructure:"max_concurrent"`
+	WorkspaceDir  string           `mapstructure:"workspace_dir"`
+	Recovery      RecoveryConfig   `mapstructure:"recovery"`
+	Workspace     DeveloperWorkspaceConfig `mapstructure:"workspace"`
+}
+
+// DeveloperWorkspaceConfig holds workspace-specific configuration for the developer agent.
+type DeveloperWorkspaceConfig struct {
+	Persistence PersistenceConfig `mapstructure:"persistence"`
+}
+
+// PersistenceConfig holds workspace persistence configuration.
+type PersistenceConfig struct {
+	Enabled              bool          `mapstructure:"enabled"`
+	SnapshotInterval     time.Duration `mapstructure:"snapshot_interval"`
+	MaxSnapshots         int           `mapstructure:"max_snapshots"`
+	RetentionHours       int           `mapstructure:"retention_hours"`
+	CompressSnapshots    bool          `mapstructure:"compress_snapshots"`
+	ResumeOnRestart      bool          `mapstructure:"resume_on_restart"`
+	ValidateBeforeResume bool          `mapstructure:"validate_before_resume"`
 }
 
 // StateConfig holds state storage configuration.
