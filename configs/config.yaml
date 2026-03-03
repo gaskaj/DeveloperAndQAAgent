@@ -68,7 +68,7 @@ decomposition:
   # Enable automatic issue decomposition for complex issues
   enabled: true
   # Iteration budget — each API round-trip counts as 1 iteration
-  max_iteration_budget: 250
+  max_iteration_budget: 100
   # Maximum number of subtasks when decomposing
   max_subtasks: 5
 
