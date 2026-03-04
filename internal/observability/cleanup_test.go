@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	
+
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
 )
 
@@ -98,14 +99,14 @@ func TestLogCleanupManager_AgeBasedCleanup(t *testing.T) {
 	// Create log files with different ages
 	now := time.Now()
 	files := []struct {
-		name    string
-		age     time.Duration
+		name         string
+		age          time.Duration
 		shouldDelete bool
 	}{
-		{"app.log", 0, false},                    // Current file
-		{"app.1.log", 20 * 24 * time.Hour, false}, // 20 days old - keep
-		{"app.2.log", 35 * 24 * time.Hour, true},  // 35 days old - delete
-		{"app.3.log", 45 * 24 * time.Hour, true},  // 45 days old - delete
+		{"app.log", 0, false},                       // Current file
+		{"app.1.log", 20 * 24 * time.Hour, false},   // 20 days old - keep
+		{"app.2.log", 35 * 24 * time.Hour, true},    // 35 days old - delete
+		{"app.3.log", 45 * 24 * time.Hour, true},    // 45 days old - delete
 		{"app.4.log.gz", 40 * 24 * time.Hour, true}, // 40 days old compressed - delete
 	}
 
@@ -131,7 +132,7 @@ func TestLogCleanupManager_AgeBasedCleanup(t *testing.T) {
 	for _, file := range files {
 		filePath := filepath.Join(tempDir, file.name)
 		_, err := os.Stat(filePath)
-		
+
 		if file.shouldDelete {
 			assert.True(t, os.IsNotExist(err), "File %s should have been deleted", file.name)
 		} else {
@@ -177,13 +178,13 @@ func TestLogCleanupManager_GetLogFiles(t *testing.T) {
 
 	// Create various files
 	files := []string{
-		"app.log",         // Current log file
-		"app.1.log",       // Rotated log file
-		"app.2.log.gz",    // Compressed log file
-		"debug.log",       // Another log file
-		"config.yaml",     // Not a log file
-		"data.txt",        // Not a log file
-		"app.log.backup",  // Contains .log. but not a standard rotated file
+		"app.log",        // Current log file
+		"app.1.log",      // Rotated log file
+		"app.2.log.gz",   // Compressed log file
+		"debug.log",      // Another log file
+		"config.yaml",    // Not a log file
+		"data.txt",       // Not a log file
+		"app.log.backup", // Contains .log. but not a standard rotated file
 	}
 
 	baseTime := time.Now()
@@ -225,10 +226,10 @@ func TestLogCleanupManager_DiskSpaceCleanup(t *testing.T) {
 		size int
 		age  time.Duration
 	}{
-		{"app.log", 1000, 0},                      // Current file - should not be deleted
-		{"app.1.log", 5000, time.Hour},            // Small file
-		{"app.2.log", 10000, 2 * time.Hour},       // Medium file
-		{"app.3.log", 15000, 3 * time.Hour},       // Large file
+		{"app.log", 1000, 0},                // Current file - should not be deleted
+		{"app.1.log", 5000, time.Hour},      // Small file
+		{"app.2.log", 10000, 2 * time.Hour}, // Medium file
+		{"app.3.log", 15000, 3 * time.Hour}, // Large file
 	}
 
 	baseTime := time.Now()
@@ -367,13 +368,13 @@ func TestLogCleanupManager_ArchiveFile(t *testing.T) {
 	// Original file should be removed after archiving
 	_, err = os.Stat(sourceFile)
 	assert.True(t, os.IsNotExist(err), "Original file should be removed after archiving")
-	
+
 	// Archive should be smaller than original content (due to compression)
 	// We can't compare to the original file size since it's been removed,
 	// but we can verify the archive exists and has reasonable content
 	archiveInfo, err := os.Stat(archiveFile)
 	require.NoError(t, err)
-	
+
 	assert.Greater(t, archiveInfo.Size(), int64(0), "Archive should have content")
 }
 
@@ -408,9 +409,141 @@ func isLinuxSystem() bool {
 	return err == nil
 }
 
+func TestNewLogCleanupManagerWithConfig(t *testing.T) {
+	cleanupConfig := config.LogCleanupConfig{
+		Enabled:         true,
+		RetentionDays:   30,
+		CleanupInterval: time.Hour,
+	}
+	appConfig := &config.Config{
+		GitHub: config.GitHubConfig{
+			Owner: "testowner",
+			Repo:  "testrepo",
+		},
+	}
+
+	manager := NewLogCleanupManagerWithConfig(cleanupConfig, appConfig)
+	require.NotNil(t, manager)
+	assert.True(t, manager.config.Enabled)
+}
+
+func TestLogCleanupManager_StartAlreadyStarted(t *testing.T) {
+	tempDir := t.TempDir()
+
+	cleanupConfig := config.LogCleanupConfig{
+		Enabled:         true,
+		RetentionDays:   30,
+		CleanupInterval: 100 * time.Millisecond,
+	}
+
+	manager := NewLogCleanupManager(cleanupConfig)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err := manager.Start(ctx, tempDir)
+	require.NoError(t, err)
+	defer manager.Stop()
+
+	// Starting again should error
+	err = manager.Start(ctx, tempDir)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "already started")
+}
+
+func TestLogCleanupManager_CleanupOldLogsForRepo(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create repo-specific log directory
+	repoLogDir := filepath.Join(tempDir, "owner", "repo")
+	require.NoError(t, os.MkdirAll(repoLogDir, 0755))
+
+	// Create an old log file in the repo-specific directory
+	oldFile := filepath.Join(repoLogDir, "app.1.log")
+	pastTime := time.Now().Add(-35 * 24 * time.Hour)
+	require.NoError(t, createFileWithModTime(oldFile, "old log content", pastTime))
+
+	// Create a recent log file
+	recentFile := filepath.Join(repoLogDir, "app.log")
+	require.NoError(t, os.WriteFile(recentFile, []byte("recent log"), 0644))
+
+	cleanupConfig := config.LogCleanupConfig{
+		Enabled:         true,
+		RetentionDays:   30,
+		CleanupInterval: time.Hour,
+	}
+
+	manager := NewLogCleanupManager(cleanupConfig)
+
+	err := manager.CleanupOldLogsForRepo(tempDir, "owner/repo")
+	require.NoError(t, err)
+
+	// Old file should be deleted
+	_, err = os.Stat(oldFile)
+	assert.True(t, os.IsNotExist(err))
+
+	// Recent file should still exist
+	assert.FileExists(t, recentFile)
+}
+
+func TestLogCleanupManager_CleanupOldLogsForRepo_NonExistentRepo(t *testing.T) {
+	tempDir := t.TempDir()
+
+	cleanupConfig := config.LogCleanupConfig{
+		Enabled:         true,
+		RetentionDays:   30,
+		CleanupInterval: time.Hour,
+	}
+
+	manager := NewLogCleanupManager(cleanupConfig)
+
+	// Should not error for non-existent repo directory
+	err := manager.CleanupOldLogsForRepo(tempDir, "nonexistent/repo")
+	assert.NoError(t, err)
+}
+
+func TestLogCleanupManager_CleanupByDiskSpace(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create some rotated log files (files with .log. in name are eligible for disk space cleanup)
+	for i := 1; i <= 3; i++ {
+		filePath := filepath.Join(tempDir, fmt.Sprintf("app.%d.log.gz", i))
+		content := strings.Repeat("x", 1000)
+		pastTime := time.Now().Add(-time.Duration(i) * time.Hour)
+		require.NoError(t, createFileWithModTime(filePath, content, pastTime))
+	}
+
+	// Also create current log file (should be skipped by disk space cleanup)
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "app.log"), []byte("current"), 0644))
+
+	cleanupConfig := config.LogCleanupConfig{
+		Enabled:         true,
+		MinFreeDiskMB:   1, // Very low threshold - won't actually trigger cleanup
+		CleanupInterval: time.Hour,
+	}
+
+	manager := NewLogCleanupManager(cleanupConfig)
+
+	// Test the CleanupOldLogs path that includes disk space check
+	err := manager.CleanupOldLogs(tempDir)
+	assert.NoError(t, err)
+}
+
+func TestLogCleanupManager_NegativeDiskMB(t *testing.T) {
+	cleanupConfig := config.LogCleanupConfig{
+		Enabled:         true,
+		MinFreeDiskMB:   -1,
+		CleanupInterval: time.Hour,
+	}
+
+	manager := NewLogCleanupManager(cleanupConfig)
+	err := manager.validateConfig()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "min_free_disk_mb cannot be negative")
+}
+
 func TestLogCleanupManager_RemoveLogFile(t *testing.T) {
 	tempDir := t.TempDir()
-	
+
 	tests := []struct {
 		name           string
 		fileName       string
@@ -425,7 +558,7 @@ func TestLogCleanupManager_RemoveLogFile(t *testing.T) {
 		},
 		{
 			name:           "remove with archive - uncompressed",
-			fileName:       "test2.log", 
+			fileName:       "test2.log",
 			archiveEnabled: true,
 			expectArchive:  true,
 		},
@@ -472,7 +605,7 @@ func TestLogCleanupManager_RemoveLogFile(t *testing.T) {
 			// Check archive expectations
 			archivePath := filePath + ".gz"
 			_, err = os.Stat(archivePath)
-			
+
 			if tt.expectArchive {
 				// Archive should have been created but then deleted (as per cleanup policy)
 				assert.True(t, os.IsNotExist(err), "Archive file should be deleted after archiving in cleanup")

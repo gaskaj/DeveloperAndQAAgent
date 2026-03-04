@@ -63,7 +63,7 @@ func runValidate(cmd *cobra.Command, args []string) error {
 			fmt.Printf("❌ Environment configuration loading failed: %v\n", err)
 			return err
 		}
-		
+
 		// Use detailed validation reporting
 		skipNetwork := skipNetworkFlag && !fullValidateFlag
 		report = config.ValidateWithReport(cmd.Context(), cfg, skipNetwork)
@@ -77,7 +77,7 @@ func runValidate(cmd *cobra.Command, args []string) error {
 				fmt.Printf("\n%s\n", formatValidationError(err))
 				return err
 			}
-			
+
 			// Get detailed report
 			report = config.ValidateWithReport(cmd.Context(), cfg, false)
 		} else {
@@ -89,7 +89,7 @@ func runValidate(cmd *cobra.Command, args []string) error {
 				fmt.Printf("\n%s\n", formatValidationError(err))
 				return err
 			}
-			
+
 			// Get detailed report
 			report = config.ValidateWithReport(cmd.Context(), cfg, skipNetwork)
 		}
@@ -139,16 +139,16 @@ func displayValidationResults(cfg *config.Config, report *config.ValidationRepor
 
 	// Success message
 	fmt.Println("✅ Configuration is valid!")
-	
+
 	// Environment info
 	if environment != "" {
 		fmt.Printf("🌍 Environment: %s\n", environment)
 	}
-	
+
 	// Display validation summary
 	fmt.Printf("📊 Validation Summary: %d rules checked, %d passed, %d warnings, %d errors\n",
 		report.TotalRules, len(report.Passed), report.WarningCount, report.ErrorCount)
-	
+
 	// Display configuration summary
 	fmt.Println("\n📋 Configuration Summary:")
 	fmt.Printf("   GitHub Repository: %s/%s\n", cfg.GitHub.Owner, cfg.GitHub.Repo)
@@ -156,7 +156,7 @@ func displayValidationResults(cfg *config.Config, report *config.ValidationRepor
 	fmt.Printf("   Max Tokens: %d\n", cfg.Claude.MaxTokens)
 	fmt.Printf("   Workspace Directory: %s\n", cfg.Agents.Developer.WorkspaceDir)
 	fmt.Printf("   State Directory: %s\n", cfg.State.Dir)
-	
+
 	// Show agent status
 	fmt.Printf("   Developer Agent: %s\n", enabledStatus(cfg.Agents.Developer.Enabled))
 	fmt.Printf("   Creativity Mode: %s\n", enabledStatus(cfg.Creativity.Enabled))
@@ -209,7 +209,7 @@ func formatValidationError(err error) string {
 	type multiError interface {
 		Unwrap() []error
 	}
-	
+
 	lines := []string{}
 	if multiErr, ok := err.(multiError); ok {
 		errs := multiErr.Unwrap()

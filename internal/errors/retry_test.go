@@ -296,6 +296,11 @@ func TestShouldRetry(t *testing.T) {
 			err:         NewPermanentError("not found", errors.New("404")),
 			shouldRetry: false,
 		},
+		{
+			name:        "nil error",
+			err:         nil,
+			shouldRetry: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -304,4 +309,139 @@ func TestShouldRetry(t *testing.T) {
 			assert.Equal(t, tt.shouldRetry, result)
 		})
 	}
+}
+
+func TestRateLimitRetryPolicy(t *testing.T) {
+	policy := RateLimitRetryPolicy()
+	assert.Equal(t, 3, policy.MaxAttempts)
+	assert.Equal(t, 60*time.Second, policy.BaseDelay)
+	assert.Equal(t, 300*time.Second, policy.MaxDelay)
+	assert.Equal(t, 1.5, policy.BackoffFactor)
+	assert.Equal(t, 0.1, policy.JitterFactor)
+	assert.Contains(t, policy.RetryableErrors, ErrorTypeRateLimit)
+	assert.Contains(t, policy.RetryableErrors, ErrorTypeAPI)
+	assert.Contains(t, policy.RetryableErrors, ErrorTypeTemporary)
+}
+
+func TestNewRetryer_NilPolicy(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	retryer := NewRetryer(nil, logger)
+	require.NotNil(t, retryer)
+	assert.Equal(t, 3, retryer.policy.MaxAttempts) // Uses DefaultRetryPolicy
+}
+
+func TestRetryer_WithOperationName(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	retryer := NewRetryer(DefaultRetryPolicy(), logger).WithOperationName("test_op")
+	assert.Equal(t, "test_op", retryer.operationName)
+}
+
+func TestRetryer_WithObservability(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	retryer := NewRetryer(DefaultRetryPolicy(), logger).WithObservability(nil, nil)
+	assert.Nil(t, retryer.structuredLogger)
+	assert.Nil(t, retryer.metrics)
+}
+
+func TestExecute_NilRetryer(t *testing.T) {
+	ctx := context.Background()
+	result, err := Execute(ctx, nil, func(ctx context.Context, attempt int) (string, error) {
+		return "ok", nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "ok", result)
+}
+
+func TestRetryDecoratorWithAttempt(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	retryer := NewRetryer(&RetryPolicy{
+		MaxAttempts:     3,
+		BaseDelay:       10 * time.Millisecond,
+		MaxDelay:        100 * time.Millisecond,
+		BackoffFactor:   2.0,
+		JitterFactor:    0.0,
+		RetryableErrors: []ErrorType{ErrorTypeTemporary, ErrorTypeAPI},
+	}, logger)
+
+	callCount := 0
+	fn := func(ctx context.Context, attempt int) (string, error) {
+		callCount++
+		if attempt < 2 {
+			return "", NewAPIError("temp", errors.New("api error"))
+		}
+		return fmt.Sprintf("success on attempt %d", attempt), nil
+	}
+
+	decoratedFn := RetryDecoratorWithAttempt(retryer, fn)
+	result, err := decoratedFn(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, "success on attempt 2", result)
+	assert.Equal(t, 2, callCount)
+}
+
+func TestAddJitter(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+	t.Run("zero jitter factor returns original delay", func(t *testing.T) {
+		retryer := NewRetryer(&RetryPolicy{
+			JitterFactor: 0,
+		}, logger)
+		delay := retryer.addJitter(1 * time.Second)
+		assert.Equal(t, 1*time.Second, delay)
+	})
+
+	t.Run("negative jitter factor returns original delay", func(t *testing.T) {
+		retryer := NewRetryer(&RetryPolicy{
+			JitterFactor: -0.1,
+		}, logger)
+		delay := retryer.addJitter(1 * time.Second)
+		assert.Equal(t, 1*time.Second, delay)
+	})
+
+	t.Run("positive jitter adds variance", func(t *testing.T) {
+		retryer := NewRetryer(&RetryPolicy{
+			JitterFactor: 0.5,
+		}, logger)
+		baseDelay := 1 * time.Second
+		// Run multiple times to verify jitter is within range
+		for i := 0; i < 100; i++ {
+			delay := retryer.addJitter(baseDelay)
+			// Should be within +/- 50% of base delay
+			assert.True(t, delay >= time.Duration(float64(baseDelay)*0.5), "delay too small: %v", delay)
+			assert.True(t, delay <= time.Duration(float64(baseDelay)*1.5), "delay too large: %v", delay)
+		}
+	})
+}
+
+func TestCalculateDelay_WithRetryAfter(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	retryer := NewRetryer(&RetryPolicy{
+		BaseDelay:     1 * time.Second,
+		MaxDelay:      10 * time.Second,
+		BackoffFactor: 2.0,
+		JitterFactor:  0.0,
+	}, logger)
+
+	// Error with RetryAfter should use that value, not exponential backoff
+	err := NewRateLimitError("rate limited", 30*time.Second)
+	delay := retryer.calculateDelay(1, err)
+	assert.Equal(t, 30*time.Second, delay)
+}
+
+func TestCalculateDelay_MaxDelayCap(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	retryer := NewRetryer(&RetryPolicy{
+		BaseDelay:     1 * time.Second,
+		MaxDelay:      5 * time.Second,
+		BackoffFactor: 10.0, // Very aggressive backoff
+		JitterFactor:  0.0,
+	}, logger)
+
+	err := &AgentCommunicationError{
+		Type:      ErrorTypeAPI,
+		Retryable: true,
+	}
+	delay := retryer.calculateDelay(5, err) // 1s * 10^4 = 10000s, should be capped at 5s
+	assert.Equal(t, 5*time.Second, delay)
 }

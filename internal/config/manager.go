@@ -43,25 +43,25 @@ const (
 
 // HotReloadableFields defines which configuration fields can be hot-reloaded
 var HotReloadableFields = map[string]bool{
-	"logging.level":                    true,
-	"logging.format":                   true,
-	"logging.enable_correlation":       true,
-	"logging.sampling.enabled":         true,
-	"logging.sampling.rate":            true,
-	"github.poll_interval":             true,
-	"github.watch_labels":              true,
-	"creativity.idle_threshold_seconds": true,
-	"creativity.suggestion_cooldown_seconds": true,
-	"creativity.max_pending_suggestions": true,
-	"metrics.enabled":                  true,
-	"metrics.collection_interval":      true,
-	"observability.performance.track_durations": true,
+	"logging.level":                               true,
+	"logging.format":                              true,
+	"logging.enable_correlation":                  true,
+	"logging.sampling.enabled":                    true,
+	"logging.sampling.rate":                       true,
+	"github.poll_interval":                        true,
+	"github.watch_labels":                         true,
+	"creativity.idle_threshold_seconds":           true,
+	"creativity.suggestion_cooldown_seconds":      true,
+	"creativity.max_pending_suggestions":          true,
+	"metrics.enabled":                             true,
+	"metrics.collection_interval":                 true,
+	"observability.performance.track_durations":   true,
 	"observability.performance.memory_monitoring": true,
-	"workspace.cleanup.enabled":        true,
-	"workspace.cleanup.success_retention": true,
-	"workspace.cleanup.failure_retention": true,
-	"workspace.monitoring.disk_check_interval": true,
-	"workspace.monitoring.cleanup_interval": true,
+	"workspace.cleanup.enabled":                   true,
+	"workspace.cleanup.success_retention":         true,
+	"workspace.cleanup.failure_retention":         true,
+	"workspace.monitoring.disk_check_interval":    true,
+	"workspace.monitoring.cleanup_interval":       true,
 }
 
 // NewConfigManager creates a new configuration manager
@@ -85,7 +85,7 @@ func (cm *ConfigManager) LoadInitialConfig() (*Config, error) {
 	}
 
 	cm.currentConfig = cfg
-	cm.logger.Info("initial configuration loaded", 
+	cm.logger.Info("initial configuration loaded",
 		"config_path", cm.configPath,
 		"github_repo", fmt.Sprintf("%s/%s", cfg.GitHub.Owner, cfg.GitHub.Repo))
 
@@ -96,12 +96,12 @@ func (cm *ConfigManager) LoadInitialConfig() (*Config, error) {
 func (cm *ConfigManager) GetConfig() *Config {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
-	
+
 	// Return a copy to prevent external modification
 	if cm.currentConfig == nil {
 		return nil
 	}
-	
+
 	configCopy := *cm.currentConfig
 	return &configCopy
 }
@@ -127,7 +127,7 @@ func (cm *ConfigManager) StartWatching(ctx context.Context) error {
 	cm.watchCancel = cancel
 
 	go cm.watchConfigFile(watchCtx)
-	
+
 	cm.logger.Info("started configuration file watching", "config_path", cm.configPath)
 	return nil
 }
@@ -230,7 +230,7 @@ func (cm *ConfigManager) ApplyHotReloadableChanges(newConfig *Config) error {
 		cm.logger.Warn("detected non-hot-reloadable configuration changes",
 			"changes_count", len(nonReloadableChanges),
 			"requires_restart", true)
-		
+
 		for _, change := range nonReloadableChanges {
 			cm.logger.Info("non-reloadable change detected",
 				"field", change.Field,
@@ -292,8 +292,8 @@ func (cm *ConfigManager) GetConfigMetadata() map[string]interface{} {
 	}
 
 	if cm.currentConfig != nil {
-		metadata["github_repo"] = fmt.Sprintf("%s/%s", 
-			cm.currentConfig.GitHub.Owner, 
+		metadata["github_repo"] = fmt.Sprintf("%s/%s",
+			cm.currentConfig.GitHub.Owner,
 			cm.currentConfig.GitHub.Repo)
 		metadata["developer_agent_enabled"] = cm.currentConfig.Agents.Developer.Enabled
 		metadata["creativity_enabled"] = cm.currentConfig.Creativity.Enabled
@@ -332,7 +332,7 @@ func (cm *ConfigManager) watchConfigFile(ctx context.Context) {
 			if info.ModTime().After(lastModTime) {
 				lastModTime = info.ModTime()
 				cm.logger.Info("configuration file changed, reloading", "path", cm.configPath)
-				
+
 				if err := cm.reloadFromFile(); err != nil {
 					cm.logger.Error("failed to reload configuration", "error", err)
 				}

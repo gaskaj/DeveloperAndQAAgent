@@ -47,13 +47,13 @@ const (
 
 // ValidationResult contains the outcome of a validation rule
 type ValidationResult struct {
-	Rule        *ValidationRule
-	Passed      bool
-	Value       interface{}
-	Issue       string
-	Fix         string
-	Example     string
-	Metadata    map[string]interface{}
+	Rule     *ValidationRule
+	Passed   bool
+	Value    interface{}
+	Issue    string
+	Fix      string
+	Example  string
+	Metadata map[string]interface{}
 }
 
 // ValidationReport aggregates validation results
@@ -340,7 +340,7 @@ func (v *Validator) checkGitHubTokenFormat(cfg *Config) *ValidationResult {
 		return &ValidationResult{Passed: true} // Skip format check if empty (handled by required check)
 	}
 
-	isValidFormat := strings.HasPrefix(cfg.GitHub.Token, "ghp_") || 
+	isValidFormat := strings.HasPrefix(cfg.GitHub.Token, "ghp_") ||
 		strings.HasPrefix(cfg.GitHub.Token, "github_pat_") ||
 		strings.HasPrefix(cfg.GitHub.Token, "ghs_") // GitHub App token
 
@@ -577,15 +577,15 @@ func (v *Validator) checkGitHubPollIntervalRange(cfg *Config) *ValidationResult 
 
 func (v *Validator) checkSensitiveDataExposure(cfg *Config) *ValidationResult {
 	// Check if structured logging might expose sensitive data
-	if cfg.Logging.StructuredLogging.Enabled && 
-	   cfg.Logging.Level == "debug" &&
-	   cfg.Logging.StructuredLogging.IncludeStackTrace {
-		
+	if cfg.Logging.StructuredLogging.Enabled &&
+		cfg.Logging.Level == "debug" &&
+		cfg.Logging.StructuredLogging.IncludeStackTrace {
+
 		return &ValidationResult{
-			Passed: false,
-			Value:  "debug level with stack traces in structured logging",
-			Issue:  "debug logging with stack traces may expose sensitive information",
-			Fix:    "Use 'info' level for production or disable stack traces",
+			Passed:  false,
+			Value:   "debug level with stack traces in structured logging",
+			Issue:   "debug logging with stack traces may expose sensitive information",
+			Fix:     "Use 'info' level for production or disable stack traces",
 			Example: "level: info",
 		}
 	}
@@ -684,10 +684,10 @@ func (v *Validator) checkCreativityDecompositionCompatibility(cfg *Config) *Vali
 	if cfg.Creativity.Enabled && cfg.Decomposition.Enabled {
 		if cfg.Decomposition.MaxIterationBudget < 50 {
 			return &ValidationResult{
-				Passed: false,
-				Value:  cfg.Decomposition.MaxIterationBudget,
-				Issue:  "low iteration budget may limit creativity effectiveness",
-				Fix:    "Consider increasing max_iteration_budget to 50+ for creative workflows",
+				Passed:  false,
+				Value:   cfg.Decomposition.MaxIterationBudget,
+				Issue:   "low iteration budget may limit creativity effectiveness",
+				Fix:     "Consider increasing max_iteration_budget to 50+ for creative workflows",
 				Example: "50",
 			}
 		}

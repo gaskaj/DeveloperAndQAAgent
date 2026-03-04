@@ -4,18 +4,18 @@ import "time"
 
 // Defaults holds all default configuration values.
 type Defaults struct {
-	GitHub        GitHubDefaults        
-	Claude        ClaudeDefaults        
-	Agents        AgentsDefaults        
-	State         StateDefaults         
-	Logging       LoggingDefaults       
-	Metrics       MetricsDefaults       
-	Observability ObservabilityDefaults 
-	Creativity    CreativityDefaults    
-	Decomposition DecompositionDefaults 
-	ErrorHandling ErrorHandlingDefaults 
-	Shutdown      ShutdownDefaults      
-	Workspace     WorkspaceDefaults     
+	GitHub        GitHubDefaults
+	Claude        ClaudeDefaults
+	Agents        AgentsDefaults
+	State         StateDefaults
+	Logging       LoggingDefaults
+	Metrics       MetricsDefaults
+	Observability ObservabilityDefaults
+	Creativity    CreativityDefaults
+	Decomposition DecompositionDefaults
+	ErrorHandling ErrorHandlingDefaults
+	Shutdown      ShutdownDefaults
+	Workspace     WorkspaceDefaults
 }
 
 // GitHubDefaults holds default GitHub configuration values.
@@ -176,12 +176,12 @@ type RetryPolicyDefaults struct {
 
 // CircuitBreakerDefaults holds default circuit breaker configuration values.
 type CircuitBreakerDefaults struct {
-	Enabled       bool
-	MaxFailures   int64
-	Timeout       time.Duration
-	MaxRequests   int64
-	FailureRatio  float64
-	MinRequests   int64
+	Enabled      bool
+	MaxFailures  int64
+	Timeout      time.Duration
+	MaxRequests  int64
+	FailureRatio float64
+	MinRequests  int64
 }
 
 // ShutdownDefaults holds default shutdown configuration values.
@@ -220,12 +220,12 @@ type WorkspaceMonitoringDefaults struct {
 
 // RecoveryDefaults holds default recovery configuration values.
 type RecoveryDefaults struct {
-	Enabled              bool
-	StartupValidation    bool
-	AutoCleanupOrphaned  bool
-	MaxResumeAge         time.Duration
-	ValidationInterval   time.Duration
-	Consistency          ConsistencyDefaults
+	Enabled             bool
+	StartupValidation   bool
+	AutoCleanupOrphaned bool
+	MaxResumeAge        time.Duration
+	ValidationInterval  time.Duration
+	Consistency         ConsistencyDefaults
 }
 
 // ConsistencyDefaults holds default consistency configuration values.
@@ -252,11 +252,11 @@ func GetDefaults() Defaults {
 				MaxConcurrent: 1,
 				WorkspaceDir:  "./workspaces",
 				Recovery: RecoveryDefaults{
-					Enabled:              true,
-					StartupValidation:    true,
-					AutoCleanupOrphaned:  false,
-					MaxResumeAge:         24 * time.Hour,
-					ValidationInterval:   1 * time.Hour,
+					Enabled:             true,
+					StartupValidation:   true,
+					AutoCleanupOrphaned: false,
+					MaxResumeAge:        24 * time.Hour,
+					ValidationInterval:  1 * time.Hour,
 					Consistency: ConsistencyDefaults{
 						ValidateOnStartup:    true,
 						ValidatePeriodically: false,
@@ -383,7 +383,7 @@ func GetDefaults() Defaults {
 // ApplyDefaults applies default values to a config instance.
 func ApplyDefaults(cfg *Config) {
 	defaults := GetDefaults()
-	
+
 	// GitHub defaults
 	if cfg.GitHub.PollInterval == 0 {
 		cfg.GitHub.PollInterval = defaults.GitHub.PollInterval
@@ -391,7 +391,7 @@ func ApplyDefaults(cfg *Config) {
 	if len(cfg.GitHub.WatchLabels) == 0 {
 		cfg.GitHub.WatchLabels = defaults.GitHub.WatchLabels
 	}
-	
+
 	// Claude defaults
 	if cfg.Claude.Model == "" {
 		cfg.Claude.Model = defaults.Claude.Model
@@ -399,7 +399,7 @@ func ApplyDefaults(cfg *Config) {
 	if cfg.Claude.MaxTokens == 0 {
 		cfg.Claude.MaxTokens = defaults.Claude.MaxTokens
 	}
-	
+
 	// State defaults
 	if cfg.State.Backend == "" {
 		cfg.State.Backend = defaults.State.Backend
@@ -407,7 +407,7 @@ func ApplyDefaults(cfg *Config) {
 	if cfg.State.Dir == "" {
 		cfg.State.Dir = defaults.State.Dir
 	}
-	
+
 	// Agent defaults
 	if cfg.Agents.Developer.MaxConcurrent == 0 {
 		cfg.Agents.Developer.MaxConcurrent = defaults.Agents.Developer.MaxConcurrent
@@ -415,7 +415,7 @@ func ApplyDefaults(cfg *Config) {
 	if cfg.Agents.Developer.WorkspaceDir == "" {
 		cfg.Agents.Developer.WorkspaceDir = defaults.Agents.Developer.WorkspaceDir
 	}
-	
+
 	// Creativity defaults
 	if cfg.Creativity.IdleThresholdSeconds == 0 {
 		cfg.Creativity.IdleThresholdSeconds = defaults.Creativity.IdleThresholdSeconds
@@ -429,7 +429,7 @@ func ApplyDefaults(cfg *Config) {
 	if cfg.Creativity.MaxRejectionHistory == 0 {
 		cfg.Creativity.MaxRejectionHistory = defaults.Creativity.MaxRejectionHistory
 	}
-	
+
 	// Decomposition defaults
 	if cfg.Decomposition.MaxIterationBudget == 0 {
 		cfg.Decomposition.MaxIterationBudget = defaults.Decomposition.MaxIterationBudget
@@ -437,7 +437,7 @@ func ApplyDefaults(cfg *Config) {
 	if cfg.Decomposition.MaxSubtasks == 0 {
 		cfg.Decomposition.MaxSubtasks = defaults.Decomposition.MaxSubtasks
 	}
-	
+
 	// Workspace defaults
 	if cfg.Workspace.Limits.MaxSizeMB == 0 {
 		cfg.Workspace.Limits.MaxSizeMB = defaults.Workspace.Limits.MaxSizeMB
@@ -460,7 +460,7 @@ func ApplyDefaults(cfg *Config) {
 	if cfg.Workspace.Monitoring.CleanupInterval == 0 {
 		cfg.Workspace.Monitoring.CleanupInterval = defaults.Workspace.Monitoring.CleanupInterval
 	}
-	
+
 	// Logging defaults
 	if cfg.Logging.Level == "" {
 		cfg.Logging.Level = defaults.Logging.Level
@@ -468,7 +468,7 @@ func ApplyDefaults(cfg *Config) {
 	if cfg.Logging.Format == "" {
 		cfg.Logging.Format = defaults.Logging.Format
 	}
-	
+
 	// Recovery defaults
 	if cfg.Agents.Developer.Recovery.MaxResumeAge == 0 {
 		cfg.Agents.Developer.Recovery.MaxResumeAge = defaults.Agents.Developer.Recovery.MaxResumeAge
@@ -476,7 +476,7 @@ func ApplyDefaults(cfg *Config) {
 	if cfg.Agents.Developer.Recovery.ValidationInterval == 0 {
 		cfg.Agents.Developer.Recovery.ValidationInterval = defaults.Agents.Developer.Recovery.ValidationInterval
 	}
-	
+
 	// Shutdown defaults
 	if cfg.Shutdown.Timeout == 0 {
 		cfg.Shutdown.Timeout = defaults.Shutdown.Timeout

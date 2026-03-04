@@ -26,17 +26,17 @@ func (ve *ValidationErrors) Error() string {
 	if len(ve.Errors) == 0 {
 		return "no validation errors"
 	}
-	
+
 	if len(ve.Errors) == 1 {
 		return ve.Errors[0].Error()
 	}
-	
+
 	var messages []string
 	messages = append(messages, fmt.Sprintf("found %d validation errors:", len(ve.Errors)))
 	for _, err := range ve.Errors {
 		messages = append(messages, "  - "+err.Error())
 	}
-	
+
 	return strings.Join(messages, "\n")
 }
 

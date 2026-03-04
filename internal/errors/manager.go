@@ -29,11 +29,11 @@ func NewManager(cfg *config.ErrorHandlingConfig, logger *slog.Logger) *Manager {
 			Retry: config.RetryConfig{
 				Enabled: true,
 				DefaultPolicy: config.RetryPolicyConfig{
-					MaxAttempts:   3,
-					BaseDelay:     1 * time.Second,
-					MaxDelay:      30 * time.Second,
-					BackoffFactor: 2.0,
-					JitterFactor:  0.1,
+					MaxAttempts:     3,
+					BaseDelay:       1 * time.Second,
+					MaxDelay:        30 * time.Second,
+					BackoffFactor:   2.0,
+					JitterFactor:    0.1,
 					RetryableErrors: []string{"network", "timeout", "api", "temporary"},
 				},
 				Policies: make(map[string]config.RetryPolicyConfig),
@@ -61,7 +61,7 @@ func NewManager(cfg *config.ErrorHandlingConfig, logger *slog.Logger) *Manager {
 
 	// Initialize retry policies
 	manager.initializeRetryPolicies()
-	
+
 	// Initialize circuit breakers
 	manager.initializeCircuitBreakers()
 
@@ -96,11 +96,11 @@ func (m *Manager) GetRetryer(operationType string) *Retryer {
 	if policy, exists := m.retryPolicies[operationType]; exists {
 		retryer := NewRetryer(policy, m.logger).
 			WithOperationName(operationType)
-		
+
 		if m.structuredLogger != nil && m.metrics != nil {
 			retryer = retryer.WithObservability(m.structuredLogger, m.metrics)
 		}
-		
+
 		return retryer
 	}
 
@@ -108,22 +108,22 @@ func (m *Manager) GetRetryer(operationType string) *Retryer {
 	if policy, exists := m.retryPolicies["default"]; exists {
 		retryer := NewRetryer(policy, m.logger).
 			WithOperationName(operationType)
-		
+
 		if m.structuredLogger != nil && m.metrics != nil {
 			retryer = retryer.WithObservability(m.structuredLogger, m.metrics)
 		}
-		
+
 		return retryer
 	}
 
 	// Ultimate fallback
 	retryer := NewRetryer(DefaultRetryPolicy(), m.logger).
 		WithOperationName(operationType)
-	
+
 	if m.structuredLogger != nil && m.metrics != nil {
 		retryer = retryer.WithObservability(m.structuredLogger, m.metrics)
 	}
-	
+
 	return retryer
 }
 
@@ -132,8 +132,8 @@ func (m *Manager) GetCircuitBreaker(serviceName string) *CircuitBreaker {
 	if !m.config.CircuitBreaker.Enabled {
 		// Return a disabled circuit breaker (always closed)
 		return NewCircuitBreaker(
-			&CircuitBreakerConfig{MaxFailures: 999999, Timeout: 1 * time.Hour}, 
-			serviceName, 
+			&CircuitBreakerConfig{MaxFailures: 999999, Timeout: 1 * time.Hour},
+			serviceName,
 			m.logger,
 		)
 	}
@@ -196,9 +196,9 @@ func (m *Manager) GetCombinedDecorator(serviceName, operationType string) func(f
 			err := fn(ctx)
 			return struct{}{}, err
 		}
-		
+
 		decoratedFn := RetryDecorator(retryer, wrappedFn)
-		
+
 		return func(ctx context.Context) error {
 			return circuitBreaker.Execute(ctx, func(ctx context.Context) error {
 				_, err := decoratedFn(ctx)
@@ -234,7 +234,7 @@ func (m *Manager) initializeRetryPolicies() {
 	}
 }
 
-// initializeCircuitBreakers sets up circuit breakers from configuration  
+// initializeCircuitBreakers sets up circuit breakers from configuration
 func (m *Manager) initializeCircuitBreakers() {
 	// Circuit breakers are created lazily in GetCircuitBreaker()
 	// This allows for dynamic service discovery

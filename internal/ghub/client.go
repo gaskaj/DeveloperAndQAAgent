@@ -3,8 +3,8 @@ package ghub
 import (
 	"context"
 
-	"github.com/google/go-github/v68/github"
 	agentErrors "github.com/gaskaj/DeveloperAndQAAgent/internal/errors"
+	"github.com/google/go-github/v68/github"
 )
 
 // Client defines the interface for GitHub operations.

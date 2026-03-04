@@ -95,10 +95,10 @@ func (rm *RecoveryManager) RecoverInterruptedWorkflows(ctx context.Context) erro
 			fmt.Sprintf("recovered_%d_of_%d_workflows", recoveredCount, len(workflows)))
 		rm.structuredLogger.LogDecisionPoint(ctx, "recovery_manager", "recovery_complete",
 			fmt.Sprintf("processed %d interrupted workflows", len(workflows)), map[string]interface{}{
-			"total_found":     len(workflows),
-			"recovered_count": recoveredCount,
-			"failed_count":    len(workflows) - recoveredCount,
-		})
+				"total_found":     len(workflows),
+				"recovered_count": recoveredCount,
+				"failed_count":    len(workflows) - recoveredCount,
+			})
 		rm.structuredLogger.LogAgentStop(ctx, "recovery_manager", 0, recoveryErr)
 	}
 
@@ -126,7 +126,7 @@ func (rm *RecoveryManager) findInterruptedWorkflows(ctx context.Context) ([]*Age
 	// Look for workflows that were interrupted during shutdown
 	// In a real implementation, this would query the state store for
 	// entries with CheckpointedAt times and InterruptedBy fields
-	
+
 	return workflows, nil
 }
 
@@ -159,7 +159,7 @@ func (rm *RecoveryManager) recoverWorkflow(ctx context.Context, workflow *AgentW
 		// Early states - safe to reset and let agent reclaim
 		recoveryAction = "reset_to_ready"
 		err = rm.resetIssueToReady(workflowCtx, issueNum)
-	
+
 	case StateImplement:
 		// In progress - need to check if we should resume or reset
 		if rm.shouldResumeImplementation(workflow) {
@@ -169,17 +169,17 @@ func (rm *RecoveryManager) recoverWorkflow(ctx context.Context, workflow *AgentW
 			recoveryAction = "reset_to_ready"
 			err = rm.resetIssueToReady(workflowCtx, issueNum)
 		}
-	
+
 	case StateCommit, StatePR, StateValidation:
 		// Late states - check if work was completed
 		recoveryAction = "check_completion"
 		err = rm.checkWorkflowCompletion(workflowCtx, workflow)
-	
+
 	case StateReview, StateComplete:
 		// Final states - just clean up
 		recoveryAction = "cleanup_completed"
 		err = rm.cleanupCompletedWorkflow(workflowCtx, workflow)
-	
+
 	default:
 		recoveryAction = "reset_to_ready"
 		err = rm.resetIssueToReady(workflowCtx, issueNum)
@@ -192,7 +192,7 @@ func (rm *RecoveryManager) recoverWorkflow(ctx context.Context, workflow *AgentW
 			"recovery_action": recoveryAction,
 			"success":         err == nil,
 		})
-		
+
 		if err == nil {
 			rm.structuredLogger.LogWorkflowTransition(workflowCtx, issueNum, "recovering", "recovered", recoveryAction)
 		} else {
@@ -293,7 +293,7 @@ func (rm *RecoveryManager) cleanupCheckpoint(ctx context.Context, workflow *Agen
 	workflow.State = "recovered"
 	workflow.UpdatedAt = time.Now()
 	workflow.InterruptedBy = ""
-	
+
 	// Save the updated state (this effectively marks it as processed)
 	return rm.store.Save(ctx, workflow)
 }

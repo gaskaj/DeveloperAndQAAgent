@@ -89,7 +89,7 @@ func runConfigValidate(cmd *cobra.Command, args []string) error {
 
 	// Success message
 	fmt.Printf("✅ Configuration validation passed: %s\n", cfgFile)
-	
+
 	if showPassedChecks {
 		printPassedValidations(cfg)
 	}
@@ -129,7 +129,7 @@ func runConfigEnvVars(cmd *cobra.Command, args []string) error {
 
 func printPassedValidations(cfg *config.Config) {
 	fmt.Println("\n✅ Passed validations:")
-	
+
 	// Required fields
 	if cfg.GitHub.Token != "" {
 		fmt.Println("  • github.token: present and properly formatted")
@@ -161,7 +161,7 @@ func printPassedValidations(cfg *config.Config) {
 
 	// Workspace limits
 	if cfg.Workspace.Limits.MinFreeDiskMB > cfg.Workspace.Limits.MaxSizeMB {
-		fmt.Printf("  • workspace.limits: disk space properly configured (min_free: %dMB, max_size: %dMB)\n", 
+		fmt.Printf("  • workspace.limits: disk space properly configured (min_free: %dMB, max_size: %dMB)\n",
 			cfg.Workspace.Limits.MinFreeDiskMB, cfg.Workspace.Limits.MaxSizeMB)
 	}
 }
@@ -471,11 +471,11 @@ func printEnvVarsTable(mappings []EnvVarMapping) error {
 		if mapping.Required {
 			required = "Yes"
 		}
-		fmt.Printf("%-35s %-25s %-8s %-8s %s\n", 
-			mapping.ConfigKey, 
-			mapping.EnvVar, 
-			mapping.Type, 
-			required, 
+		fmt.Printf("%-35s %-25s %-8s %-8s %s\n",
+			mapping.ConfigKey,
+			mapping.EnvVar,
+			mapping.Type,
+			required,
 			mapping.Example)
 	}
 
@@ -527,11 +527,11 @@ func formatStringSliceYAML(slice []string, indent string) string {
 	if len(slice) == 0 {
 		return ""
 	}
-	
+
 	var result strings.Builder
 	for _, item := range slice {
 		result.WriteString(fmt.Sprintf("%s\"%s\"\n", indent, item))
 	}
-	
+
 	return strings.TrimSuffix(result.String(), "\n")
 }

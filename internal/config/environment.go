@@ -52,24 +52,24 @@ func ParseEnvironmentType(env string) (EnvironmentType, error) {
 
 // EnvironmentConfig holds environment-specific configuration overrides
 type EnvironmentConfig struct {
-	Name                    string
-	Type                    EnvironmentType
-	ConfigFiles             []string
-	RequiredEnvVars         []string
-	ValidationRules         []EnvironmentValidationRule
-	AllowedFeatures         []string
-	DisallowedFeatures      []string
+	Name                     string
+	Type                     EnvironmentType
+	ConfigFiles              []string
+	RequiredEnvVars          []string
+	ValidationRules          []EnvironmentValidationRule
+	AllowedFeatures          []string
+	DisallowedFeatures       []string
 	RequiredSecurityFeatures []string
 }
 
 // EnvironmentValidationRule defines environment-specific validation rules
 type EnvironmentValidationRule struct {
-	Field       string
-	Required    bool
+	Field         string
+	Required      bool
 	AllowedValues []string
-	MinValue    interface{}
-	MaxValue    interface{}
-	Description string
+	MinValue      interface{}
+	MaxValue      interface{}
+	Description   string
 }
 
 // EnvironmentManager handles environment-specific configuration loading and validation
@@ -156,9 +156,9 @@ func (em *EnvironmentManager) registerDefaultEnvironments() {
 		},
 		ValidationRules: []EnvironmentValidationRule{
 			{
-				Field:       "logging.level",
+				Field:         "logging.level",
 				AllowedValues: []string{"debug", "info", "warn"},
-				Description: "Development should use debug or info logging",
+				Description:   "Development should use debug or info logging",
 			},
 			{
 				Field:       "agents.developer.max_concurrent",
@@ -167,7 +167,7 @@ func (em *EnvironmentManager) registerDefaultEnvironments() {
 				Description: "Development should use limited concurrency",
 			},
 		},
-		AllowedFeatures: []string{"creativity", "decomposition", "debug_logging"},
+		AllowedFeatures:          []string{"creativity", "decomposition", "debug_logging"},
 		RequiredSecurityFeatures: []string{}, // Relaxed for development
 	}
 
@@ -184,9 +184,9 @@ func (em *EnvironmentManager) registerDefaultEnvironments() {
 		},
 		ValidationRules: []EnvironmentValidationRule{
 			{
-				Field:       "logging.level",
+				Field:         "logging.level",
 				AllowedValues: []string{"info", "warn", "error"},
-				Description: "Staging should use info or higher logging",
+				Description:   "Staging should use info or higher logging",
 			},
 			{
 				Field:       "agents.developer.max_concurrent",
@@ -200,7 +200,7 @@ func (em *EnvironmentManager) registerDefaultEnvironments() {
 				Description: "Staging must have metrics enabled",
 			},
 		},
-		AllowedFeatures: []string{"creativity", "decomposition", "metrics"},
+		AllowedFeatures:          []string{"creativity", "decomposition", "metrics"},
 		RequiredSecurityFeatures: []string{"correlation_logging"},
 	}
 
@@ -217,9 +217,9 @@ func (em *EnvironmentManager) registerDefaultEnvironments() {
 		},
 		ValidationRules: []EnvironmentValidationRule{
 			{
-				Field:       "logging.level",
+				Field:         "logging.level",
 				AllowedValues: []string{"info", "warn", "error"},
-				Description: "Production must not use debug logging",
+				Description:   "Production must not use debug logging",
 			},
 			{
 				Field:       "agents.developer.max_concurrent",
@@ -248,7 +248,7 @@ func (em *EnvironmentManager) registerDefaultEnvironments() {
 				Description: "Production must have circuit breakers enabled",
 			},
 		},
-		AllowedFeatures: []string{"metrics", "retry", "circuit_breaker", "observability"},
+		AllowedFeatures:    []string{"metrics", "retry", "circuit_breaker", "observability"},
 		DisallowedFeatures: []string{"debug_logging"},
 		RequiredSecurityFeatures: []string{
 			"correlation_logging",
@@ -267,9 +267,9 @@ func (em *EnvironmentManager) registerDefaultEnvironments() {
 		RequiredEnvVars: []string{}, // Tests may use mock credentials
 		ValidationRules: []EnvironmentValidationRule{
 			{
-				Field:       "logging.level",
+				Field:         "logging.level",
 				AllowedValues: []string{"debug", "info", "warn", "error"},
-				Description: "Test environment allows all log levels",
+				Description:   "Test environment allows all log levels",
 			},
 			{
 				Field:       "agents.developer.max_concurrent",
@@ -278,7 +278,7 @@ func (em *EnvironmentManager) registerDefaultEnvironments() {
 				Description: "Test should use minimal concurrency",
 			},
 		},
-		AllowedFeatures: []string{"creativity", "decomposition", "debug_logging", "mock_apis"},
+		AllowedFeatures:          []string{"creativity", "decomposition", "debug_logging", "mock_apis"},
 		RequiredSecurityFeatures: []string{}, // Relaxed for testing
 	}
 }
@@ -298,21 +298,21 @@ func (em *EnvironmentManager) bindEnvironmentVariables(v *viper.Viper) {
 
 	// Bind specific environment variables to configuration keys
 	envBindings := map[string]string{
-		"GITHUB_TOKEN":      "github.token",
-		"GITHUB_OWNER":      "github.owner",
-		"GITHUB_REPO":       "github.repo",
-		"ANTHROPIC_API_KEY": "claude.api_key",
-		"CLAUDE_MODEL":      "claude.model",
-		"CLAUDE_MAX_TOKENS": "claude.max_tokens",
-		"WORKSPACE_DIR":     "agents.developer.workspace_dir",
-		"STATE_DIR":         "state.dir",
-		"LOG_LEVEL":         "logging.level",
-		"LOG_FORMAT":        "logging.format",
-		"LOG_FILE":          "logging.file_path",
-		"METRICS_ENABLED":   "metrics.enabled",
-		"POLL_INTERVAL":     "github.poll_interval",
-		"MAX_CONCURRENT":    "agents.developer.max_concurrent",
-		"CREATIVITY_ENABLED": "creativity.enabled",
+		"GITHUB_TOKEN":          "github.token",
+		"GITHUB_OWNER":          "github.owner",
+		"GITHUB_REPO":           "github.repo",
+		"ANTHROPIC_API_KEY":     "claude.api_key",
+		"CLAUDE_MODEL":          "claude.model",
+		"CLAUDE_MAX_TOKENS":     "claude.max_tokens",
+		"WORKSPACE_DIR":         "agents.developer.workspace_dir",
+		"STATE_DIR":             "state.dir",
+		"LOG_LEVEL":             "logging.level",
+		"LOG_FORMAT":            "logging.format",
+		"LOG_FILE":              "logging.file_path",
+		"METRICS_ENABLED":       "metrics.enabled",
+		"POLL_INTERVAL":         "github.poll_interval",
+		"MAX_CONCURRENT":        "agents.developer.max_concurrent",
+		"CREATIVITY_ENABLED":    "creativity.enabled",
 		"DECOMPOSITION_ENABLED": "decomposition.enabled",
 	}
 
@@ -422,7 +422,7 @@ func (em *EnvironmentManager) validateSecurityRequirements(cfg *Config, envConfi
 // getConfigValue retrieves a configuration value by field path
 func (em *EnvironmentManager) getConfigValue(cfg *Config, fieldPath string) interface{} {
 	parts := strings.Split(fieldPath, ".")
-	
+
 	switch parts[0] {
 	case "logging":
 		if len(parts) < 2 {
@@ -471,7 +471,7 @@ func (em *EnvironmentManager) getConfigValue(cfg *Config, fieldPath string) inte
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -480,7 +480,7 @@ func (em *EnvironmentManager) isEmptyValue(value interface{}) bool {
 	if value == nil {
 		return true
 	}
-	
+
 	switch v := value.(type) {
 	case string:
 		return v == ""
@@ -498,19 +498,19 @@ func (em *EnvironmentManager) isEmptyValue(value interface{}) bool {
 // GetEnvironmentInfo returns information about available environments
 func (em *EnvironmentManager) GetEnvironmentInfo() map[string]interface{} {
 	info := make(map[string]interface{})
-	
+
 	for name, env := range em.environments {
 		info[name] = map[string]interface{}{
-			"type":                     env.Type.String(),
-			"config_files":             env.ConfigFiles,
-			"required_env_vars":        env.RequiredEnvVars,
-			"allowed_features":         env.AllowedFeatures,
-			"disallowed_features":      env.DisallowedFeatures,
+			"type":                       env.Type.String(),
+			"config_files":               env.ConfigFiles,
+			"required_env_vars":          env.RequiredEnvVars,
+			"allowed_features":           env.AllowedFeatures,
+			"disallowed_features":        env.DisallowedFeatures,
 			"required_security_features": env.RequiredSecurityFeatures,
-			"validation_rules_count":   len(env.ValidationRules),
+			"validation_rules_count":     len(env.ValidationRules),
 		}
 	}
-	
+
 	return info
 }
 
@@ -520,12 +520,12 @@ func (em *EnvironmentManager) ValidateEnvironmentOverride(environment string, ov
 	if err != nil {
 		return err
 	}
-	
+
 	envConfig, exists := em.environments[env.String()]
 	if !exists {
 		return fmt.Errorf("unknown environment: %s", environment)
 	}
-	
+
 	// Check that overrides don't violate environment constraints
 	for key, value := range overrides {
 		// Check if this feature is disallowed in this environment
@@ -534,7 +534,7 @@ func (em *EnvironmentManager) ValidateEnvironmentOverride(environment string, ov
 				return fmt.Errorf("override %s contains disallowed feature %s for %s environment", key, disallowed, environment)
 			}
 		}
-		
+
 		// Validate against environment rules
 		for _, rule := range envConfig.ValidationRules {
 			if rule.Field == key {
@@ -554,6 +554,6 @@ func (em *EnvironmentManager) ValidateEnvironmentOverride(environment string, ov
 			}
 		}
 	}
-	
+
 	return nil
 }

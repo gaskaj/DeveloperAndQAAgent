@@ -70,17 +70,17 @@ var ErrCircuitBreakerOpen = &CircuitBreakerError{"circuit breaker is open"}
 
 // CircuitBreaker implements the circuit breaker pattern
 type CircuitBreaker struct {
-	config           *CircuitBreakerConfig
-	state            int32 // Use atomic operations for thread safety
-	failures         int64
-	requests         int64
+	config              *CircuitBreakerConfig
+	state               int32 // Use atomic operations for thread safety
+	failures            int64
+	requests            int64
 	successiveSuccesses int64
-	lastFailureTime  int64 // Unix timestamp
-	logger           *slog.Logger
-	structuredLogger *observability.StructuredLogger
-	metrics          *observability.Metrics
-	name             string
-	mu               sync.RWMutex
+	lastFailureTime     int64 // Unix timestamp
+	logger              *slog.Logger
+	structuredLogger    *observability.StructuredLogger
+	metrics             *observability.Metrics
+	name                string
+	mu                  sync.RWMutex
 }
 
 // NewCircuitBreaker creates a new circuit breaker with the given configuration
@@ -114,25 +114,25 @@ func (cb *CircuitBreaker) Execute(ctx context.Context, fn func(context.Context) 
 				"state": state.String(),
 			})
 		}
-		
+
 		if cb.structuredLogger != nil {
 			cb.structuredLogger.LogCircuitBreakerRejection(ctx, cb.name, state.String())
 		}
-		
+
 		cb.logger.Debug("circuit breaker rejected request",
 			"name", cb.name,
 			"state", state.String(),
 			"correlation_id", observability.GetCorrelationID(ctx))
-		
+
 		return ErrCircuitBreakerOpen
 	}
 
 	// Execute the function
 	err := fn(ctx)
-	
+
 	// Record the result
 	cb.recordResult(ctx, err)
-	
+
 	return err
 }
 
@@ -140,11 +140,11 @@ func (cb *CircuitBreaker) Execute(ctx context.Context, fn func(context.Context) 
 func (cb *CircuitBreaker) canExecute() (bool, CircuitBreakerState) {
 	state := CircuitBreakerState(atomic.LoadInt32(&cb.state))
 	now := time.Now().Unix()
-	
+
 	switch state {
 	case StateClosed:
 		return true, state
-		
+
 	case StateOpen:
 		// Check if timeout has elapsed
 		lastFailure := atomic.LoadInt64(&cb.lastFailureTime)
@@ -157,12 +157,12 @@ func (cb *CircuitBreaker) canExecute() (bool, CircuitBreakerState) {
 			return true, StateHalfOpen
 		}
 		return false, state
-		
+
 	case StateHalfOpen:
 		// Allow limited requests
 		requests := atomic.LoadInt64(&cb.requests)
 		return requests < cb.config.MaxRequests, state
-		
+
 	default:
 		return false, state
 	}
@@ -172,7 +172,7 @@ func (cb *CircuitBreaker) canExecute() (bool, CircuitBreakerState) {
 func (cb *CircuitBreaker) recordResult(ctx context.Context, err error) {
 	correlationID := observability.GetCorrelationID(ctx)
 	atomic.AddInt64(&cb.requests, 1)
-	
+
 	if err != nil {
 		cb.recordFailure(ctx, correlationID)
 	} else {
@@ -185,16 +185,16 @@ func (cb *CircuitBreaker) recordFailure(ctx context.Context, correlationID strin
 	failures := atomic.AddInt64(&cb.failures, 1)
 	atomic.StoreInt64(&cb.lastFailureTime, time.Now().Unix())
 	atomic.StoreInt64(&cb.successiveSuccesses, 0)
-	
+
 	currentState := CircuitBreakerState(atomic.LoadInt32(&cb.state))
-	
+
 	if cb.metrics != nil {
 		cb.metrics.Inc("circuit_breaker_failure", map[string]string{
 			"name":  cb.name,
 			"state": currentState.String(),
 		})
 	}
-	
+
 	switch currentState {
 	case StateClosed:
 		if cb.shouldOpen() {
@@ -202,14 +202,14 @@ func (cb *CircuitBreaker) recordFailure(ctx context.Context, correlationID strin
 				cb.logStateTransition(StateClosed, StateOpen)
 			}
 		}
-		
+
 	case StateHalfOpen:
 		// Any failure in half-open state should open the circuit
 		if atomic.CompareAndSwapInt32(&cb.state, int32(StateHalfOpen), int32(StateOpen)) {
 			cb.logStateTransition(StateHalfOpen, StateOpen)
 		}
 	}
-	
+
 	cb.logger.Debug("circuit breaker recorded failure",
 		"name", cb.name,
 		"state", currentState.String(),
@@ -221,14 +221,14 @@ func (cb *CircuitBreaker) recordFailure(ctx context.Context, correlationID strin
 func (cb *CircuitBreaker) recordSuccess(ctx context.Context, correlationID string) {
 	successes := atomic.AddInt64(&cb.successiveSuccesses, 1)
 	currentState := CircuitBreakerState(atomic.LoadInt32(&cb.state))
-	
+
 	if cb.metrics != nil {
 		cb.metrics.Inc("circuit_breaker_success", map[string]string{
 			"name":  cb.name,
 			"state": currentState.String(),
 		})
 	}
-	
+
 	if currentState == StateHalfOpen && successes >= cb.config.MaxRequests {
 		// Close the circuit after enough successful requests
 		if atomic.CompareAndSwapInt32(&cb.state, int32(StateHalfOpen), int32(StateClosed)) {
@@ -238,7 +238,7 @@ func (cb *CircuitBreaker) recordSuccess(ctx context.Context, correlationID strin
 			cb.logStateTransition(StateHalfOpen, StateClosed)
 		}
 	}
-	
+
 	cb.logger.Debug("circuit breaker recorded success",
 		"name", cb.name,
 		"state", currentState.String(),
@@ -250,12 +250,12 @@ func (cb *CircuitBreaker) recordSuccess(ctx context.Context, correlationID strin
 func (cb *CircuitBreaker) shouldOpen() bool {
 	failures := atomic.LoadInt64(&cb.failures)
 	requests := atomic.LoadInt64(&cb.requests)
-	
+
 	// Check absolute failure threshold
 	if failures >= cb.config.MaxFailures {
 		return true
 	}
-	
+
 	// Check failure ratio threshold
 	if requests >= cb.config.MinRequests {
 		failureRatio := float64(failures) / float64(requests)
@@ -263,7 +263,7 @@ func (cb *CircuitBreaker) shouldOpen() bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -272,7 +272,7 @@ func (cb *CircuitBreaker) logStateTransition(from, to CircuitBreakerState) {
 	if cb.structuredLogger != nil {
 		cb.structuredLogger.LogCircuitBreakerStateChange(context.Background(), cb.name, from.String(), to.String())
 	}
-	
+
 	if cb.metrics != nil {
 		cb.metrics.Inc("circuit_breaker_state_change", map[string]string{
 			"name": cb.name,
@@ -280,7 +280,7 @@ func (cb *CircuitBreaker) logStateTransition(from, to CircuitBreakerState) {
 			"to":   to.String(),
 		})
 	}
-	
+
 	cb.logger.Info("circuit breaker state changed",
 		"name", cb.name,
 		"from", from.String(),

@@ -13,11 +13,11 @@ import (
 
 // RetryPolicy defines how retries should be performed
 type RetryPolicy struct {
-	MaxAttempts   int
-	BaseDelay     time.Duration
-	MaxDelay      time.Duration
-	BackoffFactor float64
-	JitterFactor  float64
+	MaxAttempts     int
+	BaseDelay       time.Duration
+	MaxDelay        time.Duration
+	BackoffFactor   float64
+	JitterFactor    float64
 	RetryableErrors []ErrorType
 }
 
@@ -74,7 +74,7 @@ func RateLimitRetryPolicy() *RetryPolicy {
 // NoRetryPolicy returns a policy that disables retries
 func NoRetryPolicy() *RetryPolicy {
 	return &RetryPolicy{
-		MaxAttempts: 1,
+		MaxAttempts:     1,
 		RetryableErrors: []ErrorType{},
 	}
 }
@@ -118,7 +118,7 @@ type ExecuteFunc[T any] func(ctx context.Context, attempt int) (T, error)
 // Execute runs the given function with retry logic
 func Execute[T any](ctx context.Context, retryer *Retryer, fn ExecuteFunc[T]) (T, error) {
 	var zero T
-	
+
 	if retryer == nil {
 		retryer = NewRetryer(DefaultRetryPolicy(), slog.Default())
 	}
@@ -143,8 +143,8 @@ func Execute[T any](ctx context.Context, retryer *Retryer, fn ExecuteFunc[T]) (T
 		if retryer.structuredLogger != nil {
 			retryer.structuredLogger.LogRetryAttempt(ctx, operationName, attempt, retryer.policy.MaxAttempts)
 		}
-		
-		retryer.logger.Debug("executing operation", 
+
+		retryer.logger.Debug("executing operation",
 			"operation", operationName,
 			"attempt", attempt,
 			"max_attempts", retryer.policy.MaxAttempts,
@@ -152,17 +152,17 @@ func Execute[T any](ctx context.Context, retryer *Retryer, fn ExecuteFunc[T]) (T
 
 		// Execute the function
 		result, err := fn(ctx, attempt)
-		
+
 		// If no error, we're done
 		if err == nil {
 			if timer != nil {
 				timer.StopWithContext(ctx, "retry_operation")
 			}
-			
+
 			if retryer.structuredLogger != nil {
 				retryer.structuredLogger.LogRetrySuccess(ctx, operationName, attempt)
 			}
-			
+
 			if retryer.metrics != nil {
 				retryer.metrics.Inc("retry_success", map[string]string{
 					"operation": operationName,
@@ -170,25 +170,25 @@ func Execute[T any](ctx context.Context, retryer *Retryer, fn ExecuteFunc[T]) (T
 				})
 			}
 
-			retryer.logger.Debug("operation succeeded", 
+			retryer.logger.Debug("operation succeeded",
 				"operation", operationName,
 				"attempt", attempt,
 				"correlation_id", correlationID)
-			
+
 			return result, nil
 		}
 
 		lastErr = err
-		
+
 		// Classify the error
 		agentErr := ClassifyError(err)
-		
+
 		// Check if this is the last attempt
 		if attempt >= retryer.policy.MaxAttempts {
 			if timer != nil {
 				timer.StopWithContext(ctx, "retry_operation")
 			}
-			
+
 			if retryer.metrics != nil {
 				retryer.metrics.Inc("retry_exhausted", map[string]string{
 					"operation":  operationName,
@@ -206,7 +206,7 @@ func Execute[T any](ctx context.Context, retryer *Retryer, fn ExecuteFunc[T]) (T
 				"attempts", attempt,
 				"error", err,
 				"correlation_id", correlationID)
-			
+
 			return zero, fmt.Errorf("operation failed after %d attempts: %w", attempt, err)
 		}
 
@@ -215,7 +215,7 @@ func Execute[T any](ctx context.Context, retryer *Retryer, fn ExecuteFunc[T]) (T
 			if timer != nil {
 				timer.StopWithContext(ctx, "retry_operation")
 			}
-			
+
 			if retryer.metrics != nil {
 				retryer.metrics.Inc("retry_non_retryable", map[string]string{
 					"operation":  operationName,
@@ -234,13 +234,13 @@ func Execute[T any](ctx context.Context, retryer *Retryer, fn ExecuteFunc[T]) (T
 				"error_type", agentErr.Type,
 				"error", err,
 				"correlation_id", correlationID)
-			
+
 			return zero, fmt.Errorf("non-retryable error: %w", err)
 		}
 
 		// Calculate delay
 		delay := retryer.calculateDelay(attempt, agentErr)
-		
+
 		if retryer.metrics != nil {
 			retryer.metrics.Inc("retry_attempt", map[string]string{
 				"operation":  operationName,
@@ -323,7 +323,7 @@ func (r *Retryer) addJitter(delay time.Duration) time.Duration {
 
 	jitter := float64(delay) * r.policy.JitterFactor * (2*rand.Float64() - 1) // -jitterFactor to +jitterFactor
 	jitteredDelay := delay + time.Duration(jitter)
-	
+
 	// Ensure we don't go negative
 	if jitteredDelay < 0 {
 		return delay / 2

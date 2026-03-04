@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"compress/gzip"
-	
+
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
 )
 
@@ -234,9 +234,9 @@ func (m *LogRotationManager) getRotatedFiles(logDir, baseName, ext string) ([]ro
 				continue
 			}
 			rotatedFiles = append(rotatedFiles, rotatedFileInfo{
-				name:      name,
-				number:    rotationNum,
-				modTime:   info.ModTime(),
+				name:       name,
+				number:     rotationNum,
+				modTime:    info.ModTime(),
 				compressed: strings.HasSuffix(name, ".gz"),
 			})
 		}
@@ -260,7 +260,7 @@ func (m *LogRotationManager) shiftRotatedFiles(logDir, baseName, ext string, rot
 	for i := len(rotatedFiles) - 1; i >= 0; i-- {
 		file := rotatedFiles[i]
 		newNumber := file.number + 1
-		
+
 		var newName string
 		if file.compressed {
 			newName = fmt.Sprintf("%s.%d%s.gz", baseName, newNumber, ext)

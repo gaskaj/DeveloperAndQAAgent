@@ -10,12 +10,12 @@ import (
 
 func TestValidator(t *testing.T) {
 	tests := []struct {
-		name           string
-		config         *Config
-		skipNetwork    bool
-		expectedErrors int
+		name             string
+		config           *Config
+		skipNetwork      bool
+		expectedErrors   int
 		expectedWarnings int
-		expectPass     bool
+		expectPass       bool
 	}{
 		{
 			name: "valid_minimal_config",
@@ -140,21 +140,21 @@ func TestValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			validator := NewValidator().WithSkipNetwork(tt.skipNetwork)
-			
+
 			report := validator.ValidateConfig(context.Background(), tt.config)
-			
+
 			assert.Equal(t, tt.expectedErrors, report.ErrorCount, "Error count mismatch")
 			assert.Equal(t, tt.expectedWarnings, report.WarningCount, "Warning count mismatch")
-			
+
 			if tt.expectPass {
 				assert.Equal(t, 0, report.ErrorCount, "Should pass validation")
 			} else {
 				assert.Greater(t, report.ErrorCount, 0, "Should fail validation")
 			}
-			
+
 			// Verify report structure
 			assert.Equal(t, len(validator.rules), report.TotalRules, "Total rules should match validator rules")
-			
+
 			// Check that all results have proper metadata
 			for _, result := range report.Failed {
 				assert.NotNil(t, result.Rule)
@@ -164,7 +164,7 @@ func TestValidator(t *testing.T) {
 					assert.NotEmpty(t, result.Fix, "Error rules should have fix suggestions")
 				}
 			}
-			
+
 			for _, result := range report.Warnings {
 				assert.NotNil(t, result.Rule)
 				assert.NotEmpty(t, result.Issue)
@@ -175,41 +175,41 @@ func TestValidator(t *testing.T) {
 
 func TestValidationRuleCategories(t *testing.T) {
 	validator := NewValidator().WithSkipNetwork(true)
-	
+
 	// Count rules by category
 	categoryCounts := make(map[ValidationCategory]int)
 	for _, rule := range validator.rules {
 		categoryCounts[rule.Category]++
 	}
-	
+
 	// Ensure we have rules for each important category
 	assert.Greater(t, categoryCounts[CategoryRequired], 0, "Should have required field rules")
 	assert.Greater(t, categoryCounts[CategoryFormat], 0, "Should have format validation rules")
 	assert.Greater(t, categoryCounts[CategoryPermissions], 0, "Should have permissions rules")
 	assert.Greater(t, categoryCounts[CategoryLimits], 0, "Should have limits validation rules")
-	
+
 	t.Logf("Rule distribution by category: %+v", categoryCounts)
 }
 
 func TestValidationLevels(t *testing.T) {
 	validator := NewValidator().WithSkipNetwork(true)
-	
+
 	// Count rules by level
 	levelCounts := make(map[ValidationLevel]int)
 	for _, rule := range validator.rules {
 		levelCounts[rule.Level]++
 	}
-	
+
 	// Ensure we have different severity levels
 	assert.Greater(t, levelCounts[ValidationLevelError], 0, "Should have error-level rules")
 	assert.Greater(t, levelCounts[ValidationLevelWarning], 0, "Should have warning-level rules")
-	
+
 	t.Logf("Rule distribution by level: %+v", levelCounts)
 }
 
 func TestWorkspacePermissionValidation(t *testing.T) {
 	validator := NewValidator()
-	
+
 	// Test writable directory
 	writableDir := t.TempDir()
 	config := &Config{
@@ -219,21 +219,21 @@ func TestWorkspacePermissionValidation(t *testing.T) {
 			},
 		},
 	}
-	
+
 	result := validator.checkWorkspacePermissions(config)
 	assert.True(t, result.Passed, "Should pass for writable directory")
-	
+
 	// Test non-existent directory that can be created
 	nonExistentDir := t.TempDir() + "/subdir/deeper"
 	config.Agents.Developer.WorkspaceDir = nonExistentDir
-	
+
 	result = validator.checkWorkspacePermissions(config)
 	assert.True(t, result.Passed, "Should pass for directory that can be created")
-	
+
 	// Test read-only directory (simulate by using /dev/null parent)
 	readOnlyPath := "/dev/null/cannot-create"
 	config.Agents.Developer.WorkspaceDir = readOnlyPath
-	
+
 	result = validator.checkWorkspacePermissions(config)
 	assert.False(t, result.Passed, "Should fail for unwritable path")
 	assert.NotEmpty(t, result.Issue)
@@ -242,7 +242,7 @@ func TestWorkspacePermissionValidation(t *testing.T) {
 
 func TestTokenFormatValidation(t *testing.T) {
 	validator := NewValidator()
-	
+
 	tests := []struct {
 		name     string
 		token    string
@@ -256,7 +256,7 @@ func TestTokenFormatValidation(t *testing.T) {
 		{"old_format", "1234567890abcdef", false},
 		{"wrong_prefix", "gho_1234567890abcdef", false},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := &Config{
@@ -264,10 +264,10 @@ func TestTokenFormatValidation(t *testing.T) {
 					Token: tt.token,
 				},
 			}
-			
+
 			result := validator.checkGitHubTokenFormat(config)
 			assert.Equal(t, tt.expected, result.Passed, "Token format validation mismatch")
-			
+
 			if !result.Passed && tt.token != "" {
 				assert.NotEmpty(t, result.Issue)
 				assert.NotEmpty(t, result.Fix)
@@ -282,26 +282,26 @@ func TestReportToErrorConversion(t *testing.T) {
 	successReport := &ValidationReport{
 		ErrorCount: 0,
 	}
-	
+
 	err := successReport.ToError()
 	assert.NoError(t, err)
-	
+
 	// Test failed report with single error
 	failedReport := &ValidationReport{
 		ErrorCount: 1,
 		Failed: []*ValidationResult{
 			{
-				Rule: &ValidationRule{Field: "test.field"},
+				Rule:  &ValidationRule{Field: "test.field"},
 				Issue: "test issue",
 				Fix:   "test fix",
 			},
 		},
 	}
-	
+
 	err = failedReport.ToError()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "test issue")
-	
+
 	// Check if it's a structured validation error
 	if validationErr, ok := err.(*ConfigValidationError); ok {
 		assert.Equal(t, "test.field", validationErr.Field)
@@ -312,7 +312,7 @@ func TestReportToErrorConversion(t *testing.T) {
 
 func TestValidatorWithNetworkSkip(t *testing.T) {
 	validator := NewValidator()
-	
+
 	// Count network rules
 	networkRuleCount := 0
 	for _, rule := range validator.rules {
@@ -320,9 +320,9 @@ func TestValidatorWithNetworkSkip(t *testing.T) {
 			networkRuleCount++
 		}
 	}
-	
+
 	assert.Greater(t, networkRuleCount, 0, "Should have network validation rules")
-	
+
 	// Test that network rules are skipped
 	validatorSkipNetwork := NewValidator().WithSkipNetwork(true)
 	config := &Config{
@@ -335,9 +335,9 @@ func TestValidatorWithNetworkSkip(t *testing.T) {
 			APIKey: "sk-ant-api03-test_key",
 		},
 	}
-	
+
 	report := validatorSkipNetwork.ValidateConfig(context.Background(), config)
-	
+
 	// Verify no network rules were executed
 	networkRulesExecuted := 0
 	for _, result := range report.Passed {
@@ -350,6 +350,6 @@ func TestValidatorWithNetworkSkip(t *testing.T) {
 			networkRulesExecuted++
 		}
 	}
-	
+
 	assert.Equal(t, 0, networkRulesExecuted, "No network rules should be executed when skipped")
 }

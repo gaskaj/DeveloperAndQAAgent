@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
 	"github.com/stretchr/testify/assert"
@@ -462,3 +463,263 @@ func (m *capturingMockAI) GenerateSuggestion(_ context.Context, prompt string) (
 	*m.capturePrompt = prompt
 	return m.suggestion, nil
 }
+
+// --- Additional tests for uncovered functions ---
+
+func TestCreativityEngine_CheckForAvailableWork(t *testing.T) {
+	t.Run("no work available", func(t *testing.T) {
+		gh := newMockGitHub()
+		ai := &mockAI{}
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+
+		hasWork, err := engine.checkForAvailableWork(context.Background())
+		require.NoError(t, err)
+		assert.False(t, hasWork)
+	})
+
+	t.Run("work available", func(t *testing.T) {
+		gh := newMockGitHub()
+		gh.issuesByLabel[labelReady] = []*Issue{{Number: 1, Title: "Work"}}
+		ai := &mockAI{}
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+
+		hasWork, err := engine.checkForAvailableWork(context.Background())
+		require.NoError(t, err)
+		assert.True(t, hasWork)
+	})
+
+	t.Run("error checking work", func(t *testing.T) {
+		gh := &errorMockGitHub{err: fmt.Errorf("network error")}
+		ai := &mockAI{}
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+
+		_, err := engine.checkForAvailableWork(context.Background())
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "checking for available work")
+	})
+}
+
+func TestCreativityEngine_HasPendingSuggestion(t *testing.T) {
+	t.Run("no pending suggestions", func(t *testing.T) {
+		gh := newMockGitHub()
+		ai := &mockAI{}
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+
+		pending, err := engine.hasPendingSuggestion(context.Background())
+		require.NoError(t, err)
+		assert.False(t, pending)
+	})
+
+	t.Run("at max pending suggestions", func(t *testing.T) {
+		gh := newMockGitHub()
+		gh.issuesByLabel[labelSuggestion] = []*Issue{{Number: 1, Title: "Suggestion"}}
+		ai := &mockAI{}
+		cfg := testConfig()
+		cfg.MaxPendingSuggestions = 1
+		engine := NewCreativityEngine(gh, ai, cfg, RepoConfig{}, "test-agent", testLogger())
+
+		pending, err := engine.hasPendingSuggestion(context.Background())
+		require.NoError(t, err)
+		assert.True(t, pending)
+	})
+
+	t.Run("error checking pending", func(t *testing.T) {
+		gh := &errorMockGitHub{err: fmt.Errorf("network error")}
+		ai := &mockAI{}
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+
+		_, err := engine.hasPendingSuggestion(context.Background())
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "checking pending suggestions")
+	})
+}
+
+func TestCreativityEngine_IsDuplicate(t *testing.T) {
+	t.Run("matches pending idea", func(t *testing.T) {
+		gh := newMockGitHub()
+		ai := &mockAI{}
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+
+		projectCtx := &ProjectContext{
+			PendingIdeas: []*Issue{{Number: 1, Title: "Add logging"}},
+		}
+
+		assert.True(t, engine.isDuplicate(&Suggestion{Title: "add logging", Body: "details"}, projectCtx))
+	})
+
+	t.Run("matches open issue", func(t *testing.T) {
+		gh := newMockGitHub()
+		ai := &mockAI{}
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+
+		projectCtx := &ProjectContext{
+			OpenIssues: []*Issue{{Number: 1, Title: "Improve error handling"}},
+		}
+
+		assert.True(t, engine.isDuplicate(&Suggestion{Title: "improve error handling", Body: "details"}, projectCtx))
+	})
+
+	t.Run("matches rejection cache", func(t *testing.T) {
+		gh := newMockGitHub()
+		ai := &mockAI{}
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine.rejectionCache.Add("Add caching layer")
+
+		projectCtx := &ProjectContext{}
+		assert.True(t, engine.isDuplicate(&Suggestion{Title: "Add caching layer", Body: "details"}, projectCtx))
+	})
+
+	t.Run("no match", func(t *testing.T) {
+		gh := newMockGitHub()
+		ai := &mockAI{}
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+
+		projectCtx := &ProjectContext{
+			PendingIdeas: []*Issue{{Number: 1, Title: "Add logging"}},
+			OpenIssues:   []*Issue{{Number: 2, Title: "Fix bug"}},
+		}
+
+		assert.False(t, engine.isDuplicate(&Suggestion{Title: "Add monitoring", Body: "details"}, projectCtx))
+	})
+}
+
+func TestCreativityEngine_CreateSuggestionIssue(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		gh := newMockGitHub()
+		ai := &mockAI{}
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+
+		err := engine.createSuggestionIssue(context.Background(), &Suggestion{
+			Title: "Test suggestion",
+			Body:  "Test body",
+		})
+		require.NoError(t, err)
+
+		require.Len(t, gh.createdIssues, 1)
+		assert.Equal(t, "Test suggestion", gh.createdIssues[0].title)
+		assert.Contains(t, gh.createdIssues[0].body, "Test body")
+		assert.Contains(t, gh.createdIssues[0].body, "test-agent")
+		assert.Contains(t, gh.createdIssues[0].labels, labelSuggestion)
+	})
+
+	t.Run("error creating issue", func(t *testing.T) {
+		gh := newMockGitHub()
+		gh.createErr = fmt.Errorf("API error")
+		ai := &mockAI{}
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+
+		err := engine.createSuggestionIssue(context.Background(), &Suggestion{
+			Title: "Test",
+			Body:  "Body",
+		})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "creating suggestion issue")
+	})
+}
+
+func TestCreativityEngine_GenerateSuggestion(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		gh := newMockGitHub()
+		ai := &mockAI{suggestion: &Suggestion{Title: "Test", Body: "Body"}}
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+
+		suggestion, err := engine.generateSuggestion(context.Background(), &ProjectContext{})
+		require.NoError(t, err)
+		assert.Equal(t, "Test", suggestion.Title)
+	})
+
+	t.Run("AI error", func(t *testing.T) {
+		gh := newMockGitHub()
+		ai := &mockAI{err: fmt.Errorf("AI error")}
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+
+		_, err := engine.generateSuggestion(context.Background(), &ProjectContext{})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "generating suggestion")
+	})
+}
+
+func TestCreativityEngine_Sleep(t *testing.T) {
+	t.Run("sleeps for duration", func(t *testing.T) {
+		gh := newMockGitHub()
+		ai := &mockAI{}
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+
+		err := engine.sleep(context.Background(), 10*time.Millisecond)
+		assert.NoError(t, err)
+	})
+
+	t.Run("cancelled context", func(t *testing.T) {
+		gh := newMockGitHub()
+		ai := &mockAI{}
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel immediately
+
+		err := engine.sleep(ctx, 1*time.Hour)
+		assert.Error(t, err)
+		assert.Equal(t, context.Canceled, err)
+	})
+}
+
+func TestCreativityEngine_LoadRejectionHistory(t *testing.T) {
+	t.Run("loads rejected issues", func(t *testing.T) {
+		gh := newMockGitHub()
+		gh.issuesByLabel[labelSuggestionRejected] = []*Issue{
+			{Number: 1, Title: "Rejected idea 1"},
+			{Number: 2, Title: "Rejected idea 2"},
+		}
+		ai := &mockAI{}
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+
+		err := engine.loadRejectionHistory(context.Background())
+		require.NoError(t, err)
+
+		assert.True(t, engine.rejectionCache.Contains("Rejected idea 1"))
+		assert.True(t, engine.rejectionCache.Contains("Rejected idea 2"))
+	})
+
+	t.Run("error loading rejection history", func(t *testing.T) {
+		gh := &errorMockGitHub{err: fmt.Errorf("API error")}
+		ai := &mockAI{}
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+
+		err := engine.loadRejectionHistory(context.Background())
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "loading rejection history")
+	})
+}
+
+func TestCreativityEngine_RunContextCancelled(t *testing.T) {
+	gh := newMockGitHub()
+	ai := &mockAI{}
+	engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	err := engine.Run(ctx)
+	assert.Error(t, err)
+	assert.Equal(t, context.Canceled, err)
+}
+
+// errorMockGitHub returns an error for all operations.
+type errorMockGitHub struct {
+	err error
+}
+
+func (m *errorMockGitHub) ListIssuesByLabel(_ context.Context, _ string) ([]*Issue, error) {
+	return nil, m.err
+}
+func (m *errorMockGitHub) ListClosedIssuesByLabel(_ context.Context, _ string) ([]*Issue, error) {
+	return nil, m.err
+}
+func (m *errorMockGitHub) ListAllClosedIssues(_ context.Context) ([]*Issue, error) {
+	return nil, m.err
+}
+func (m *errorMockGitHub) CreateIssue(_ context.Context, _, _ string, _ []string) (int, error) {
+	return 0, m.err
+}
+func (m *errorMockGitHub) AddLabels(_ context.Context, _ int, _ []string) error { return m.err }
+func (m *errorMockGitHub) RemoveLabel(_ context.Context, _ int, _ string) error { return m.err }

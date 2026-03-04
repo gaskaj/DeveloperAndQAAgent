@@ -13,13 +13,13 @@ import (
 type ErrorType string
 
 const (
-	ErrorTypeNetwork       ErrorType = "network"
-	ErrorTypeRateLimit     ErrorType = "rate_limit"
+	ErrorTypeNetwork        ErrorType = "network"
+	ErrorTypeRateLimit      ErrorType = "rate_limit"
 	ErrorTypeAuthentication ErrorType = "auth"
-	ErrorTypeTimeout       ErrorType = "timeout"
-	ErrorTypeAPI           ErrorType = "api"
-	ErrorTypePermanent     ErrorType = "permanent"
-	ErrorTypeTemporary     ErrorType = "temporary"
+	ErrorTypeTimeout        ErrorType = "timeout"
+	ErrorTypeAPI            ErrorType = "api"
+	ErrorTypePermanent      ErrorType = "permanent"
+	ErrorTypeTemporary      ErrorType = "temporary"
 )
 
 // AgentCommunicationError represents a structured error from agent communications
@@ -256,8 +256,8 @@ func isNetworkError(err error) bool {
 
 // contains checks if a string contains a substring (case-insensitive)
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		(s == substr || (len(s) > len(substr) && 
-			(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
+	return len(s) >= len(substr) &&
+		(s == substr || (len(s) > len(substr) &&
+			(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
 				strings.Contains(strings.ToLower(s), strings.ToLower(substr)))))
 }

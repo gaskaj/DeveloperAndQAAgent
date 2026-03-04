@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	
+
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
 )
 
@@ -283,14 +284,14 @@ func TestLogRotationManager_GetRotatedFiles(t *testing.T) {
 
 	// Create various files to test pattern matching
 	files := []string{
-		"app.log",         // Current log file
-		"app.1.log",       // Rotated file
-		"app.2.log",       // Rotated file
-		"app.10.log",      // Rotated file with higher number
-		"app.1.log.gz",    // Compressed rotated file
-		"other.log",       // Different log file
-		"app.log.backup",  // Not a rotated file
-		"app.txt",         // Not a log file
+		"app.log",        // Current log file
+		"app.1.log",      // Rotated file
+		"app.2.log",      // Rotated file
+		"app.10.log",     // Rotated file with higher number
+		"app.1.log.gz",   // Compressed rotated file
+		"other.log",      // Different log file
+		"app.log.backup", // Not a rotated file
+		"app.txt",        // Not a log file
 	}
 
 	for _, file := range files {
@@ -347,6 +348,176 @@ func TestLogRotationManager_CreateLogDirectory(t *testing.T) {
 	info, err := os.Stat(logDir)
 	require.NoError(t, err)
 	assert.True(t, info.IsDir())
+}
+
+func TestLogRotationManager_CheckAndRotate(t *testing.T) {
+	tempDir := t.TempDir()
+	logFile := filepath.Join(tempDir, "test.log")
+
+	// Create a log file with modification time in the past (exceeds MaxAge)
+	content := "test log content"
+	require.NoError(t, os.WriteFile(logFile, []byte(content), 0644))
+	pastTime := time.Now().Add(-25 * time.Hour)
+	require.NoError(t, os.Chtimes(logFile, pastTime, pastTime))
+
+	rotationConfig := config.LogRotationConfig{
+		Enabled:       true,
+		MaxFileSize:   100, // Large size to avoid size-based rotation
+		MaxFiles:      3,
+		MaxAge:        24 * time.Hour,
+		CompressOld:   false,
+		CheckInterval: time.Second,
+	}
+
+	manager := NewLogRotationManager(rotationConfig)
+
+	// checkAndRotate should detect age-based rotation need and rotate
+	err := manager.checkAndRotate(logFile)
+	require.NoError(t, err)
+
+	// Original file should be moved
+	assert.NoFileExists(t, logFile)
+	rotatedFile := filepath.Join(tempDir, "test.1.log")
+	assert.FileExists(t, rotatedFile)
+}
+
+func TestLogRotationManager_CheckAndRotate_NoRotationNeeded(t *testing.T) {
+	tempDir := t.TempDir()
+	logFile := filepath.Join(tempDir, "test.log")
+
+	// Create a small recent file
+	require.NoError(t, os.WriteFile(logFile, []byte("small"), 0644))
+
+	rotationConfig := config.LogRotationConfig{
+		Enabled:       true,
+		MaxFileSize:   100, // 100MB - well above file size
+		MaxFiles:      3,
+		CheckInterval: time.Second,
+	}
+
+	manager := NewLogRotationManager(rotationConfig)
+
+	err := manager.checkAndRotate(logFile)
+	require.NoError(t, err)
+
+	// File should still exist (no rotation needed)
+	assert.FileExists(t, logFile)
+}
+
+func TestLogRotationManager_CheckAndRotate_NonExistentFile(t *testing.T) {
+	tempDir := t.TempDir()
+	logFile := filepath.Join(tempDir, "nonexistent.log")
+
+	rotationConfig := config.LogRotationConfig{
+		Enabled:       true,
+		MaxFileSize:   1,
+		MaxFiles:      3,
+		CheckInterval: time.Second,
+	}
+
+	manager := NewLogRotationManager(rotationConfig)
+
+	err := manager.checkAndRotate(logFile)
+	require.NoError(t, err) // Should not error, just skip
+}
+
+func TestLogRotationManager_ShouldRotateFile_SizeBased(t *testing.T) {
+	tempDir := t.TempDir()
+	logFile := filepath.Join(tempDir, "test.log")
+
+	// Create a file that exceeds 1 byte * 1024 * 1024 = 1MB threshold
+	// We use MaxFileSize=1 (1MB) but create content much smaller
+	// So set MaxFileSize very small to make it work
+	content := strings.Repeat("x", 2*1024*1024) // 2MB
+	require.NoError(t, os.WriteFile(logFile, []byte(content), 0644))
+
+	rotationConfig := config.LogRotationConfig{
+		Enabled:       true,
+		MaxFileSize:   1, // 1MB
+		MaxFiles:      3,
+		CheckInterval: time.Second,
+	}
+
+	manager := NewLogRotationManager(rotationConfig)
+
+	shouldRotate, err := manager.shouldRotateFile(logFile)
+	require.NoError(t, err)
+	assert.True(t, shouldRotate, "File exceeding max size should need rotation")
+}
+
+func TestLogRotationManager_StartAlreadyStarted(t *testing.T) {
+	tempDir := t.TempDir()
+	logFile := filepath.Join(tempDir, "test.log")
+
+	rotationConfig := config.LogRotationConfig{
+		Enabled:       true,
+		MaxFileSize:   10,
+		MaxFiles:      3,
+		CompressOld:   false,
+		CheckInterval: 100 * time.Millisecond,
+	}
+
+	manager := NewLogRotationManager(rotationConfig)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err := manager.Start(ctx, logFile)
+	require.NoError(t, err)
+	defer manager.Stop()
+
+	// Starting again should error
+	err = manager.Start(ctx, logFile)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "already started")
+}
+
+func TestLogRotationManager_StopNotStarted(t *testing.T) {
+	rotationConfig := config.LogRotationConfig{
+		Enabled:       true,
+		MaxFileSize:   10,
+		MaxFiles:      3,
+		CheckInterval: time.Second,
+	}
+
+	manager := NewLogRotationManager(rotationConfig)
+
+	// Stopping when not started should be fine
+	err := manager.Stop()
+	assert.NoError(t, err)
+}
+
+func TestLogRotationManager_MultipleRotations(t *testing.T) {
+	tempDir := t.TempDir()
+	logFile := filepath.Join(tempDir, "app.log")
+
+	rotationConfig := config.LogRotationConfig{
+		Enabled:       true,
+		MaxFileSize:   1,
+		MaxFiles:      5,
+		CompressOld:   false,
+		CheckInterval: time.Second,
+	}
+
+	manager := NewLogRotationManager(rotationConfig)
+
+	// Perform multiple rotations
+	for i := 0; i < 3; i++ {
+		require.NoError(t, os.WriteFile(logFile, []byte(fmt.Sprintf("content %d", i)), 0644))
+		err := manager.ForceRotate(logFile)
+		require.NoError(t, err)
+	}
+
+	// Should have rotated files
+	entries, err := os.ReadDir(tempDir)
+	require.NoError(t, err)
+
+	count := 0
+	for _, entry := range entries {
+		if strings.Contains(entry.Name(), "app.") && strings.Contains(entry.Name(), ".log") {
+			count++
+		}
+	}
+	assert.True(t, count >= 1, "Should have rotated files")
 }
 
 // Helper function to create a file with specific modification time

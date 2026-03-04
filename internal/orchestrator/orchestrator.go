@@ -75,12 +75,12 @@ func (o *Orchestrator) WithConfigManager(configManager *config.ConfigManager) *O
 func (o *Orchestrator) Run(ctx context.Context) error {
 	// Create enriched correlation context for orchestrator operations
 	ctx = observability.EnsureCorrelationContext(ctx, "orchestrator", 0)
-	
+
 	// Log orchestrator start
 	if o.structuredLogger != nil {
 		o.structuredLogger.LogAgentStart(ctx, "orchestrator", "multi-agent system starting")
 	}
-	
+
 	// Start configuration manager watching if configured
 	if o.configManager != nil {
 		o.logger.Info("starting configuration manager")
@@ -93,9 +93,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}()
 		}
 	}
-	
+
 	g, ctx := errgroup.WithContext(ctx)
-	
+
 	// Start workspace cleanup scheduler if configured
 	if o.cleanupScheduler != nil {
 		o.logger.Info("starting workspace cleanup scheduler")
@@ -112,7 +112,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		if logFilePath == "" {
 			logFilePath = "./logs/agent.log" // Default path
 		}
-		
+
 		o.logger.Info("starting log rotation manager", "log_file", logFilePath)
 		if err := o.rotationManager.Start(ctx, logFilePath); err != nil {
 			o.logger.Error("failed to start log rotation manager", "error", err)
@@ -132,7 +132,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		if o.logFilePath != "" {
 			logDir = filepath.Dir(o.logFilePath)
 		}
-		
+
 		o.logger.Info("starting log cleanup manager", "log_dir", logDir)
 		if err := o.cleanupManager.Start(ctx, logDir); err != nil {
 			o.logger.Error("failed to start log cleanup manager", "error", err)
@@ -149,9 +149,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	for _, a := range o.agents {
 		a := a // capture for goroutine
 		agentType := string(a.Type())
-		
+
 		o.logger.Info("starting agent", "type", agentType)
-		
+
 		// Log workflow transition to starting state and agent handoff
 		if o.structuredLogger != nil {
 			o.structuredLogger.LogWorkflowTransition(ctx, 0, "stopped", "starting", "orchestrator_start_agent")
@@ -165,12 +165,12 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			// Create agent-specific correlation context
 			agentCtx := observability.WithHandoff(ctx, "orchestrator", agentType, "startup", 0)
 			agentCtx = observability.WithWorkflowStage(agentCtx, observability.WorkflowStageStart)
-			
+
 			if err := a.Run(agentCtx); err != nil {
 				// Check if this is a graceful shutdown (context cancelled)
 				if agentCtx.Err() != nil {
 					o.logger.Info("agent stopped due to context cancellation", "type", agentType)
-					
+
 					// Log graceful shutdown
 					if o.structuredLogger != nil {
 						o.structuredLogger.LogWorkflowTransition(agentCtx, 0, "running", "stopped", "graceful_shutdown")
@@ -179,15 +179,15 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 					if o.metrics != nil {
 						o.metrics.RecordWorkflowTransition(agentCtx, "running", "stopped")
 					}
-					
+
 					return nil // Context cancellation is not an error
 				}
-				
+
 				o.logger.Error("agent stopped with error",
 					"type", agentType,
 					"error", err,
 				)
-				
+
 				// Log workflow transition to error state
 				if o.structuredLogger != nil {
 					o.structuredLogger.LogWorkflowTransition(agentCtx, 0, "running", "error", err.Error())
@@ -198,10 +198,10 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				if o.metrics != nil {
 					o.metrics.RecordWorkflowTransition(agentCtx, "running", "error")
 				}
-				
+
 				return err
 			}
-			
+
 			// Log successful shutdown with handoff back to orchestrator
 			if o.structuredLogger != nil {
 				o.structuredLogger.LogWorkflowTransition(agentCtx, 0, "running", "stopped", "graceful_shutdown")
@@ -210,18 +210,18 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if o.metrics != nil {
 				o.metrics.RecordWorkflowTransition(agentCtx, "running", "stopped")
 			}
-			
+
 			return nil
 		})
 	}
 
 	err := g.Wait()
-	
+
 	// Log orchestrator stop
 	if o.structuredLogger != nil {
 		o.structuredLogger.LogAgentStop(ctx, "orchestrator", 0, err)
 	}
-	
+
 	return err
 }
 

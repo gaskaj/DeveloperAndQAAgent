@@ -31,17 +31,17 @@ func (s *AgeBasedStrategy) ShouldCleanup(ctx context.Context, workspace *Workspa
 	case WorkspaceStateActive:
 		// Keep active workspaces, they should be managed by the workflow
 		return false, "active workspace"
-		
+
 	case WorkspaceStateFailed:
 		if age > s.FailureRetention {
 			return true, fmt.Sprintf("failed workspace older than %v", s.FailureRetention)
 		}
-		
+
 	case WorkspaceStateStale:
 		if age > s.StaleRetention {
 			return true, fmt.Sprintf("stale workspace older than %v", s.StaleRetention)
 		}
-		
+
 	case WorkspaceStateCleaned:
 		// Already cleaned, should not exist
 		return true, "workspace already marked as cleaned"
@@ -98,12 +98,12 @@ func (s *CompositeStrategy) ShouldCleanup(ctx context.Context, workspace *Worksp
 
 // Scheduler handles periodic cleanup operations.
 type Scheduler struct {
-	manager    Manager
-	strategy   CleanupStrategy
-	config     ManagerConfig
-	logger     *slog.Logger
-	stopCh     chan struct{}
-	stoppedCh  chan struct{}
+	manager   Manager
+	strategy  CleanupStrategy
+	config    ManagerConfig
+	logger    *slog.Logger
+	stopCh    chan struct{}
+	stoppedCh chan struct{}
 }
 
 // NewScheduler creates a new cleanup scheduler.
