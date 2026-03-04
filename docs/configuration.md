@@ -18,13 +18,16 @@ cfg, err := config.Load("configs/config.yaml")
 
 ## Configuration Validation and Management
 
-The enhanced configuration system provides comprehensive validation and management tools:
+The comprehensive configuration management system provides validation, hot-reload capabilities, and environment-specific configurations:
 
 ### CLI Commands
 
 ```bash
-# Validate configuration without starting agents
+# Basic validation
 agentctl config validate --config=config.yaml
+
+# Environment-specific validation
+agentctl config validate --config=config.yaml --env=prod --strict
 
 # Show all default values in YAML format
 agentctl config show-defaults --format=yaml
@@ -34,25 +37,108 @@ agentctl config env-vars
 
 # Skip network validation for faster checking
 agentctl config validate --config=config.yaml --skip-network
+
+# Comprehensive validation with network checks
+agentctl config validate --config=config.yaml --full
 ```
 
-### Validation Features
+### Configuration Management Features
 
+#### Runtime Configuration Management
+- **Hot-reload capability** for non-critical settings (logging levels, polling intervals, etc.)
+- **Configuration drift detection** comparing running vs file-based config
+- **Safe configuration updates** with rollback capability
+- **Configuration change event notifications** for subscribers
+
+#### Environment-Specific Configuration
+- **Environment overlays** (dev, staging, prod) with automatic merging
+- **Systematic environment variable overrides** with standardized naming
+- **Environment validation rules** ensuring prod configs don't leak to dev
+- **Security requirement enforcement** for production environments
+
+#### Comprehensive Validation System
 - **Required field validation** with helpful error messages
-- **Format validation** for tokens, URLs, and durations
+- **Format validation** for tokens, URLs, and durations  
 - **Range validation** for numeric values and limits
 - **Permission validation** for directory access
 - **Network validation** for API connectivity (optional)
-- **Logical validation** for interdependent settings
+- **Cross-field validation** for interdependent settings
+- **Environment-specific validation** rules
 
 ### Enhanced Error Reporting
 
 The new validation system provides structured error messages with actionable guidance:
 
 ```
-config.github.token: token format appears invalid (got: xyz_****masked****)
-config.workspace.limits.min_free_disk_mb: should be larger than max_size_mb to prevent disk space exhaustion (got: 500)
+❌ Configuration validation failed:
+  • github.token: token format appears invalid
+    Fix: Use a personal access token from GitHub settings
+    Example: ghp_xxxxxxxxxxxxxxxxxxxx
+  • workspace.limits.min_free_disk_mb: should be larger than max_size_mb to prevent disk exhaustion
+    Fix: Set min_free_disk_mb to at least 2048MB
+    Example: 2048
 ```
+
+### Hot-Reloadable Configuration Fields
+
+The following fields can be updated without restarting the agent:
+
+| Field | Description |
+|-------|-------------|
+| `logging.level` | Log verbosity level |
+| `logging.format` | Log output format |
+| `logging.enable_correlation` | Correlation ID tracking |
+| `github.poll_interval` | Issue polling frequency |
+| `github.watch_labels` | Labels to monitor |
+| `creativity.idle_threshold_seconds` | Creativity trigger delay |
+| `creativity.suggestion_cooldown_seconds` | Suggestion rate limiting |
+| `metrics.enabled` | Metrics collection |
+| `workspace.cleanup.*` | Workspace cleanup settings |
+
+Critical fields like API keys, repository settings, and agent configuration require a restart.
+
+### Environment-Specific Configuration
+
+#### Configuration File Structure
+
+```bash
+configs/
+├── config.yaml           # Base configuration
+├── config.dev.yaml       # Development overrides
+├── config.prod.yaml      # Production overrides
+└── config.local.yaml     # Local development overrides (gitignored)
+```
+
+#### Loading Environment Configuration
+
+```bash
+# Load with environment overlay
+agentctl start --config=config.yaml --env=production
+
+# Development environment
+agentctl start --config=config.yaml --env=development
+```
+
+#### Environment Validation Rules
+
+Each environment has specific validation rules:
+
+**Development:**
+- Allows debug logging
+- Permits faster polling intervals  
+- Relaxed concurrency limits
+- All features enabled for testing
+
+**Production:**
+- Requires structured logging
+- Enforces security features (correlation, error handling)
+- Prohibits debug logging
+- Requires metrics and observability
+
+**Staging:**
+- Balance between dev flexibility and prod security
+- Requires metrics but allows moderate debug info
+- Intermediate validation strictness
 
 ## Full YAML Reference
 

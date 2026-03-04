@@ -110,11 +110,11 @@ func TestGitHubClient_analyzeCheckResults(t *testing.T) {
 	client := &GitHubClient{}
 
 	tests := []struct {
-		name          string
-		checkRuns     []*github.CheckRun
-		commitStatus  *github.CombinedStatus
-		expectedStatus PRCheckStatus
-		expectedPassing bool
+		name             string
+		checkRuns        []*github.CheckRun
+		commitStatus     *github.CombinedStatus
+		expectedStatus   PRCheckStatus
+		expectedPassing  bool
 		expectedFailures int
 		expectedPending  int
 	}{
@@ -248,7 +248,7 @@ func TestGitHubClient_analyzeCheckResults(t *testing.T) {
 			assert.Equal(t, tt.expectedPassing, result.AllChecksPassing)
 			assert.Len(t, result.FailedChecks, tt.expectedFailures)
 			assert.Len(t, result.PendingChecks, tt.expectedPending)
-			
+
 			totalExpected := len(tt.checkRuns) + len(tt.commitStatus.Statuses)
 			assert.Equal(t, totalExpected, result.TotalChecks)
 
@@ -342,7 +342,7 @@ func TestGitHubClient_GetPRCheckStatus_Integration(t *testing.T) {
 		serverURL.Path += "/"
 	}
 	client.BaseURL = serverURL
-	
+
 	ghClient := &GitHubClient{
 		client: client,
 		owner:  "owner",
@@ -351,11 +351,11 @@ func TestGitHubClient_GetPRCheckStatus_Integration(t *testing.T) {
 
 	ctx := context.Background()
 	result, err := ghClient.GetPRCheckStatus(ctx, 123)
-	
+
 	require.NoError(t, err)
 	assert.Equal(t, PRCheckStatusFailed, result.Status)
 	assert.False(t, result.AllChecksPassing)
-	assert.Len(t, result.FailedChecks, 2) // One from check runs, one from status
+	assert.Len(t, result.FailedChecks, 2)  // One from check runs, one from status
 	assert.Equal(t, 3, result.TotalChecks) // 2 check runs + 1 status
 }
 
@@ -389,7 +389,7 @@ func TestGitHubClient_ValidatePR_Timeout(t *testing.T) {
 		serverURL.Path += "/"
 	}
 	client.BaseURL = serverURL
-	
+
 	ghClient := &GitHubClient{
 		client: client,
 		owner:  "owner",
@@ -404,7 +404,7 @@ func TestGitHubClient_ValidatePR_Timeout(t *testing.T) {
 
 	ctx := context.Background()
 	_, err := ghClient.ValidatePR(ctx, 123, opts)
-	
+
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "timeout waiting for PR checks")
 }
@@ -454,7 +454,7 @@ func TestGitHubClient_ValidatePR_Success(t *testing.T) {
 		serverURL.Path += "/"
 	}
 	client.BaseURL = serverURL
-	
+
 	ghClient := &GitHubClient{
 		client: client,
 		owner:  "owner",
@@ -469,7 +469,7 @@ func TestGitHubClient_ValidatePR_Success(t *testing.T) {
 
 	ctx := context.Background()
 	result, err := ghClient.ValidatePR(ctx, 123, opts)
-	
+
 	require.NoError(t, err)
 	assert.Equal(t, PRCheckStatusSuccess, result.Status)
 	assert.True(t, result.AllChecksPassing)

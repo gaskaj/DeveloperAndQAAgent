@@ -67,6 +67,10 @@ func (cm *CheckpointManager) RestoreCheckpoint(ctx context.Context, agentType st
 		return nil, fmt.Errorf("loading checkpoint for issue %d: %w", issueNum, err)
 	}
 
+	if ws.IssueNumber != issueNum {
+		return nil, fmt.Errorf("no checkpoint found for issue %d (state has issue %d)", issueNum, ws.IssueNumber)
+	}
+
 	if ws.CheckpointedAt.IsZero() {
 		return nil, fmt.Errorf("no checkpoint found for issue %d", issueNum)
 	}
@@ -105,13 +109,13 @@ func (cm *CheckpointManager) CleanupCheckpoint(ctx context.Context, ws *state.Ag
 func CreateWorkspaceCleanupHandler(workspaceDir string, logger *slog.Logger) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		logger.Debug("cleanup handler: workspace directories", "dir", workspaceDir)
-		
+
 		// This would typically:
 		// 1. Save any unsaved files
 		// 2. Close file handles
 		// 3. Clean temporary files
 		// 4. Record cleanup completion
-		
+
 		// For now, just log the action
 		logger.Info("workspace cleanup handler executed", "dir", workspaceDir)
 		return nil
@@ -122,13 +126,13 @@ func CreateWorkspaceCleanupHandler(workspaceDir string, logger *slog.Logger) fun
 func CreateGitCleanupHandler(logger *slog.Logger) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		logger.Debug("cleanup handler: git operations")
-		
+
 		// This would typically:
 		// 1. Complete or abort in-progress commits
 		// 2. Clean up temporary branches
 		// 3. Close Git connections
 		// 4. Save Git state
-		
+
 		logger.Info("git cleanup handler executed")
 		return nil
 	}
@@ -138,13 +142,13 @@ func CreateGitCleanupHandler(logger *slog.Logger) func(ctx context.Context) erro
 func CreateFileHandleCleanupHandler(logger *slog.Logger) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		logger.Debug("cleanup handler: file handles")
-		
+
 		// This would typically:
 		// 1. Close open files
 		// 2. Flush buffers
 		// 3. Release locks
 		// 4. Clean temporary files
-		
+
 		logger.Info("file handle cleanup handler executed")
 		return nil
 	}

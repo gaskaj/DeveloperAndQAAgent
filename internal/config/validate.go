@@ -120,9 +120,9 @@ func validateInterdependencies(cfg *Config, errs *ValidationErrors) {
 	// Workspace limits validation
 	if cfg.Workspace.Limits.MaxSizeMB > 0 && cfg.Workspace.Limits.MinFreeDiskMB > 0 {
 		if cfg.Workspace.Limits.MinFreeDiskMB <= cfg.Workspace.Limits.MaxSizeMB {
-			errs.Add("workspace.limits.min_free_disk_mb", 
-				fmt.Sprintf("%d (max_size_mb: %d)", cfg.Workspace.Limits.MinFreeDiskMB, cfg.Workspace.Limits.MaxSizeMB), 
-				"logical", 
+			errs.Add("workspace.limits.min_free_disk_mb",
+				fmt.Sprintf("%d (max_size_mb: %d)", cfg.Workspace.Limits.MinFreeDiskMB, cfg.Workspace.Limits.MaxSizeMB),
+				"logical",
 				fmt.Sprintf("should be larger than max_size_mb to prevent disk space exhaustion (recommended: %d)", cfg.Workspace.Limits.MaxSizeMB*2))
 		}
 	}
@@ -137,7 +137,7 @@ func validateWorkspacePermissions(cfg *Config, errs *ValidationErrors) {
 
 	// Check if directory exists or can be created
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
-		errs.Add("agents.developer.workspace_dir", workspaceDir, "permissions", 
+		errs.Add("agents.developer.workspace_dir", workspaceDir, "permissions",
 			fmt.Sprintf("cannot create directory: %v. Choose a writable directory path or fix permissions", err))
 		return
 	}
@@ -145,7 +145,7 @@ func validateWorkspacePermissions(cfg *Config, errs *ValidationErrors) {
 	// Check write permissions by creating a test file
 	testFile := filepath.Join(workspaceDir, ".agentctl-test")
 	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
-		errs.Add("agents.developer.workspace_dir", workspaceDir, "permissions", 
+		errs.Add("agents.developer.workspace_dir", workspaceDir, "permissions",
 			fmt.Sprintf("directory is not writable: %v. Fix directory permissions or choose a different path", err))
 	} else {
 		// Clean up test file
@@ -156,7 +156,7 @@ func validateWorkspacePermissions(cfg *Config, errs *ValidationErrors) {
 	stateDir := cfg.State.Dir
 	if stateDir != "" {
 		if err := os.MkdirAll(stateDir, 0755); err != nil {
-			errs.Add("state.dir", stateDir, "permissions", 
+			errs.Add("state.dir", stateDir, "permissions",
 				fmt.Sprintf("cannot create state directory: %v. Choose a writable directory path or fix permissions", err))
 		}
 	}
@@ -233,6 +233,12 @@ func validateNetworkAccess(ctx context.Context, cfg *Config, errs *ValidationErr
 	validateClaudeAccess(ctx, &cfg.Claude, errs)
 }
 
+// ValidateWithReport provides detailed validation reporting using the new validator system
+func ValidateWithReport(ctx context.Context, cfg *Config, skipNetworkValidation bool) *ValidationReport {
+	validator := NewValidator().WithSkipNetwork(skipNetworkValidation)
+	return validator.ValidateConfig(ctx, cfg)
+}
+
 // validateGitHubAccess checks GitHub token permissions and repository access.
 func validateGitHubAccess(ctx context.Context, cfg *GitHubConfig, errs *ValidationErrors) {
 	if cfg.Token == "" {
@@ -291,8 +297,6 @@ func validateClaudeAccess(ctx context.Context, cfg *ClaudeConfig, errs *Validati
 		errs.Add("claude.api_key", "", "network", "API key authentication failed. Verify API key is valid at https://console.anthropic.com/")
 	}
 }
-
-
 
 // maskToken masks sensitive token values for error messages.
 func maskToken(token string) string {

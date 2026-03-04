@@ -280,6 +280,71 @@ func TestCircuitBreakerDecorator(t *testing.T) {
 	assert.Equal(t, 1, callCount)
 }
 
+func TestNewCircuitBreaker_NilConfig(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	cb := NewCircuitBreaker(nil, "test", logger)
+	require.NotNil(t, cb)
+	assert.Equal(t, int64(5), cb.config.MaxFailures) // DefaultCircuitBreakerConfig
+	assert.Equal(t, StateClosed, cb.State())
+}
+
+func TestDefaultCircuitBreakerConfig(t *testing.T) {
+	config := DefaultCircuitBreakerConfig()
+	assert.Equal(t, int64(5), config.MaxFailures)
+	assert.Equal(t, 60*time.Second, config.Timeout)
+	assert.Equal(t, int64(3), config.MaxRequests)
+	assert.Equal(t, 0.6, config.FailureRatio)
+	assert.Equal(t, int64(10), config.MinRequests)
+}
+
+func TestCircuitBreaker_WithObservability(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	cb := NewCircuitBreaker(DefaultCircuitBreakerConfig(), "test", logger)
+	result := cb.WithObservability(nil, nil)
+	assert.Equal(t, cb, result) // returns self
+}
+
+func TestCircuitBreaker_ExecuteReturnsOriginalError(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	cb := NewCircuitBreaker(DefaultCircuitBreakerConfig(), "test", logger)
+
+	expectedErr := errors.New("original error")
+	err := cb.Execute(context.Background(), func(ctx context.Context) error {
+		return expectedErr
+	})
+
+	assert.Equal(t, expectedErr, err)
+}
+
+func TestCircuitBreaker_HalfOpenMaxRequestsLimit(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	config := &CircuitBreakerConfig{
+		MaxFailures:  2,
+		Timeout:      1 * time.Second,
+		MaxRequests:  1, // Only allow 1 request in half-open
+		FailureRatio: 0.5,
+		MinRequests:  3,
+	}
+	cb := NewCircuitBreaker(config, "test", logger)
+
+	// Open the circuit
+	for i := 0; i < 2; i++ {
+		cb.Execute(context.Background(), func(ctx context.Context) error {
+			return errors.New("failure")
+		})
+	}
+	assert.Equal(t, StateOpen, cb.State())
+
+	// Wait for timeout
+	time.Sleep(1100 * time.Millisecond)
+
+	// First request should succeed (transitions to half-open)
+	err := cb.Execute(context.Background(), func(ctx context.Context) error {
+		return nil
+	})
+	require.NoError(t, err)
+}
+
 func TestCombinedDecorator(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 

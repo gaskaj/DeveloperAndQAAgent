@@ -24,12 +24,12 @@ const (
 
 // Workspace represents a managed workspace for issue processing.
 type Workspace struct {
-	ID        int            `json:"id"`
-	Path      string         `json:"path"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	SizeMB    int64          `json:"size_mb"`
-	State     WorkspaceState `json:"state"`
+	ID        int                    `json:"id"`
+	Path      string                 `json:"path"`
+	CreatedAt time.Time              `json:"created_at"`
+	UpdatedAt time.Time              `json:"updated_at"`
+	SizeMB    int64                  `json:"size_mb"`
+	State     WorkspaceState         `json:"state"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
@@ -48,65 +48,65 @@ type WorkspaceStats struct {
 type Manager interface {
 	// CreateWorkspace creates a new workspace for the given issue ID.
 	CreateWorkspace(ctx context.Context, issueID int) (*Workspace, error)
-	
+
 	// CleanupWorkspace removes a specific workspace.
 	CleanupWorkspace(ctx context.Context, issueID int) error
-	
+
 	// CleanupStaleWorkspaces removes workspaces older than the specified duration.
 	CleanupStaleWorkspaces(ctx context.Context, olderThan time.Duration) error
-	
+
 	// GetWorkspaceStats returns current workspace statistics.
 	GetWorkspaceStats(ctx context.Context) (*WorkspaceStats, error)
-	
+
 	// CheckDiskSpace verifies sufficient disk space is available.
 	CheckDiskSpace(ctx context.Context, requiredMB int64) error
-	
+
 	// GetWorkspace retrieves workspace information for an issue ID.
 	GetWorkspace(ctx context.Context, issueID int) (*Workspace, error)
-	
+
 	// UpdateWorkspaceState updates the state of a workspace.
 	UpdateWorkspaceState(ctx context.Context, issueID int, state WorkspaceState) error
-	
+
 	// ListWorkspaces returns all workspaces matching the given criteria.
 	ListWorkspaces(ctx context.Context, state WorkspaceState) ([]*Workspace, error)
 
 	// CreateWorkspaceSnapshot creates a snapshot of the workspace state.
 	CreateWorkspaceSnapshot(ctx context.Context, issueID int, agentState *state.AgentWorkState) (*WorkspaceSnapshot, error)
-	
+
 	// RestoreWorkspaceSnapshot restores workspace from the latest snapshot.
 	RestoreWorkspaceSnapshot(ctx context.Context, issueID int) (*WorkspaceSnapshot, error)
-	
+
 	// GetWorkspaceSnapshots returns all snapshots for a workspace.
 	GetWorkspaceSnapshots(ctx context.Context, issueID int) ([]*WorkspaceSnapshot, error)
 }
 
 // ManagerConfig holds configuration for the workspace manager.
 type ManagerConfig struct {
-	BaseDir              string              `mapstructure:"base_dir"`
-	MaxSizeMB            int64               `mapstructure:"max_size_mb"`
-	MinFreeDiskMB        int64               `mapstructure:"min_free_disk_mb"`
-	MaxConcurrent        int                 `mapstructure:"max_concurrent"`
-	SuccessRetention     time.Duration       `mapstructure:"success_retention"`
-	FailureRetention     time.Duration       `mapstructure:"failure_retention"`
-	DiskCheckInterval    time.Duration       `mapstructure:"disk_check_interval"`
-	CleanupInterval      time.Duration       `mapstructure:"cleanup_interval"`
-	CleanupEnabled       bool                `mapstructure:"cleanup_enabled"`
-	Persistence          config.PersistenceConfig   `mapstructure:"persistence"`
+	BaseDir           string                   `mapstructure:"base_dir"`
+	MaxSizeMB         int64                    `mapstructure:"max_size_mb"`
+	MinFreeDiskMB     int64                    `mapstructure:"min_free_disk_mb"`
+	MaxConcurrent     int                      `mapstructure:"max_concurrent"`
+	SuccessRetention  time.Duration            `mapstructure:"success_retention"`
+	FailureRetention  time.Duration            `mapstructure:"failure_retention"`
+	DiskCheckInterval time.Duration            `mapstructure:"disk_check_interval"`
+	CleanupInterval   time.Duration            `mapstructure:"cleanup_interval"`
+	CleanupEnabled    bool                     `mapstructure:"cleanup_enabled"`
+	Persistence       config.PersistenceConfig `mapstructure:"persistence"`
 }
 
 // DefaultConfig returns a sensible default configuration.
 func DefaultConfig() ManagerConfig {
 	return ManagerConfig{
-		BaseDir:              "./workspaces",
-		MaxSizeMB:            1024,  // 1GB
-		MinFreeDiskMB:        2048,  // 2GB
-		MaxConcurrent:        5,
-		SuccessRetention:     24 * time.Hour,   // 1 day
-		FailureRetention:     168 * time.Hour,  // 1 week
-		DiskCheckInterval:    5 * time.Minute,
-		CleanupInterval:      1 * time.Hour,
-		CleanupEnabled:       true,
-		Persistence:          config.PersistenceConfig{
+		BaseDir:           "./workspaces",
+		MaxSizeMB:         1024, // 1GB
+		MinFreeDiskMB:     2048, // 2GB
+		MaxConcurrent:     5,
+		SuccessRetention:  24 * time.Hour,  // 1 day
+		FailureRetention:  168 * time.Hour, // 1 week
+		DiskCheckInterval: 5 * time.Minute,
+		CleanupInterval:   1 * time.Hour,
+		CleanupEnabled:    true,
+		Persistence: config.PersistenceConfig{
 			Enabled:              true,
 			SnapshotInterval:     5 * time.Minute,
 			MaxSnapshots:         10,
@@ -213,8 +213,8 @@ func (m *managerImpl) CreateWorkspace(ctx context.Context, issueID int) (*Worksp
 	// Cache the workspace
 	m.workspaces[issueID] = workspace
 
-	m.logger.Info("workspace created", 
-		"issue_id", issueID, 
+	m.logger.Info("workspace created",
+		"issue_id", issueID,
 		"path", workspacePath,
 		"active_workspaces", m.countActiveWorkspaces(),
 	)
@@ -250,8 +250,8 @@ func (m *managerImpl) CleanupWorkspace(ctx context.Context, issueID int) error {
 	workspace.UpdatedAt = time.Now()
 	delete(m.workspaces, issueID)
 
-	m.logger.Info("workspace cleaned up", 
-		"issue_id", issueID, 
+	m.logger.Info("workspace cleaned up",
+		"issue_id", issueID,
 		"path", workspace.Path,
 		"active_workspaces", m.countActiveWorkspaces(),
 	)
@@ -283,8 +283,8 @@ func (m *managerImpl) CleanupStaleWorkspaces(ctx context.Context, olderThan time
 		}
 
 		if err := m.CleanupWorkspace(ctx, issueID); err != nil {
-			m.logger.Error("failed to cleanup stale workspace", 
-				"issue_id", issueID, 
+			m.logger.Error("failed to cleanup stale workspace",
+				"issue_id", issueID,
 				"error", err,
 			)
 			continue
@@ -299,7 +299,7 @@ func (m *managerImpl) CleanupStaleWorkspaces(ctx context.Context, olderThan time
 		}
 	}
 
-	m.logger.Info("stale workspace cleanup completed", 
+	m.logger.Info("stale workspace cleanup completed",
 		"cleaned_count", cleanedCount,
 		"remaining_workspaces", len(m.workspaces),
 	)
@@ -380,9 +380,9 @@ func (m *managerImpl) UpdateWorkspaceState(ctx context.Context, issueID int, sta
 	workspace.State = state
 	workspace.UpdatedAt = time.Now()
 
-	m.logger.Debug("workspace state updated", 
-		"issue_id", issueID, 
-		"old_state", oldState, 
+	m.logger.Debug("workspace state updated",
+		"issue_id", issueID,
+		"old_state", oldState,
 		"new_state", state,
 	)
 

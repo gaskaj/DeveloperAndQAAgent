@@ -12,24 +12,24 @@ import (
 // in higher-level integration tests.
 func TestAssignSelfIfNoAssignees_Logic(t *testing.T) {
 	tests := []struct {
-		name               string
-		assigneeCount      int
-		shouldNeedAssign   bool
+		name             string
+		assigneeCount    int
+		shouldNeedAssign bool
 	}{
 		{
-			name:               "no assignees should trigger assignment",
-			assigneeCount:      0,
-			shouldNeedAssign:   true,
+			name:             "no assignees should trigger assignment",
+			assigneeCount:    0,
+			shouldNeedAssign: true,
 		},
 		{
-			name:               "existing assignee should not trigger assignment",
-			assigneeCount:      1,
-			shouldNeedAssign:   false,
+			name:             "existing assignee should not trigger assignment",
+			assigneeCount:    1,
+			shouldNeedAssign: false,
 		},
 		{
-			name:               "multiple assignees should not trigger assignment",
-			assigneeCount:      2,
-			shouldNeedAssign:   false,
+			name:             "multiple assignees should not trigger assignment",
+			assigneeCount:    2,
+			shouldNeedAssign: false,
 		},
 	}
 
@@ -44,7 +44,7 @@ func TestAssignSelfIfNoAssignees_Logic(t *testing.T) {
 			// Fill assignees if needed
 			for i := 0; i < tt.assigneeCount; i++ {
 				issue.Assignees[i] = &github.User{
-					Login: github.String("user" + string(rune('1' + i))),
+					Login: github.String("user" + string(rune('1'+i))),
 				}
 			}
 

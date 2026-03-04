@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"compress/gzip"
-	
+
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
 )
 
@@ -183,7 +183,7 @@ func (m *LogCleanupManager) getLogFiles(logDir string) ([]logFileInfo, error) {
 		}
 
 		name := entry.Name()
-		
+
 		// Consider files with .log extension or containing .log. (rotated logs)
 		if !strings.HasSuffix(name, ".log") && !strings.Contains(name, ".log.") {
 			continue

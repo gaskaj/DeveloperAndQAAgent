@@ -56,7 +56,7 @@ func (p *Poller) Run(ctx context.Context) error {
 				p.logger.Info("context cancelled during poll cycle")
 				return nil
 			}
-			
+
 			if err := p.poll(ctx); err != nil {
 				p.logger.Error("poll failed", "error", err)
 			}

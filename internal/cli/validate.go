@@ -11,11 +11,15 @@ import (
 var (
 	skipNetworkFlag  bool
 	fullValidateFlag bool
+	environmentFlag  string
+	strictModeFlag   bool
 )
 
 func init() {
 	validateCmd.Flags().BoolVar(&skipNetworkFlag, "skip-network", false, "Skip network-based validation (faster)")
 	validateCmd.Flags().BoolVar(&fullValidateFlag, "full", false, "Enable comprehensive validation including network checks")
+	validateCmd.Flags().StringVar(&environmentFlag, "env", "", "Validate for specific environment (dev, staging, prod)")
+	validateCmd.Flags().BoolVar(&strictModeFlag, "strict", false, "Enable strict validation mode with warnings as errors")
 	rootCmd.AddCommand(validateCmd)
 }
 
@@ -28,7 +32,9 @@ and optionally test connectivity to external services.
 Examples:
   agentctl validate --config config.yaml                    # Basic validation
   agentctl validate --config config.yaml --full            # Full validation with network checks  
-  agentctl validate --config config.yaml --skip-network    # Skip network validation (faster)`,
+  agentctl validate --config config.yaml --skip-network    # Skip network validation (faster)
+  agentctl validate --config config.yaml --env=prod        # Validate for production environment
+  agentctl validate --config config.yaml --env=prod --strict  # Strict mode (warnings as errors)`,
 	RunE: runValidate,
 }
 
@@ -46,36 +52,111 @@ func runValidate(cmd *cobra.Command, args []string) error {
 	}
 
 	var cfg *config.Config
+	var report *config.ValidationReport
 	var err error
 
-	// Choose validation method based on flags
-	if fullValidateFlag {
-		fmt.Println("🔍 Performing comprehensive validation with network checks...")
-		cfg, err = config.LoadWithSchemaValidation(cfgFile)
+	// Load configuration with environment overlay if specified
+	if environmentFlag != "" {
+		fmt.Printf("🌍 Loading configuration for environment: %s\n", environmentFlag)
+		cfg, err = config.LoadWithEnvironment(cfgFile, environmentFlag)
+		if err != nil {
+			fmt.Printf("❌ Environment configuration loading failed: %v\n", err)
+			return err
+		}
+
+		// Use detailed validation reporting
+		skipNetwork := skipNetworkFlag && !fullValidateFlag
+		report = config.ValidateWithReport(cmd.Context(), cfg, skipNetwork)
 	} else {
-		fmt.Println("🔍 Performing validation...")
-		skipNetwork := skipNetworkFlag || !fullValidateFlag
-		cfg, err = config.LoadWithOptions(cfgFile, skipNetwork)
+		// Choose validation method based on flags
+		if fullValidateFlag {
+			fmt.Println("🔍 Performing comprehensive validation with network checks...")
+			cfg, err = config.LoadWithSchemaValidation(cfgFile)
+			if err != nil {
+				fmt.Println("❌ Configuration validation failed:")
+				fmt.Printf("\n%s\n", formatValidationError(err))
+				return err
+			}
+
+			// Get detailed report
+			report = config.ValidateWithReport(cmd.Context(), cfg, false)
+		} else {
+			fmt.Println("🔍 Performing validation...")
+			skipNetwork := skipNetworkFlag || !fullValidateFlag
+			cfg, err = config.LoadWithOptions(cfgFile, skipNetwork)
+			if err != nil {
+				fmt.Println("❌ Configuration validation failed:")
+				fmt.Printf("\n%s\n", formatValidationError(err))
+				return err
+			}
+
+			// Get detailed report
+			report = config.ValidateWithReport(cmd.Context(), cfg, skipNetwork)
+		}
 	}
 
-	if err != nil {
-		// Parse validation errors and display them in a user-friendly way
+	// Display validation results
+	return displayValidationResults(cfg, report, environmentFlag, strictModeFlag)
+}
+
+func displayValidationResults(cfg *config.Config, report *config.ValidationReport, environment string, strict bool) error {
+	// Check for errors first
+	if report.ErrorCount > 0 {
 		fmt.Println("❌ Configuration validation failed:")
-		fmt.Printf("\n%s\n", formatValidationError(err))
-		return err
+		for _, result := range report.Failed {
+			fmt.Printf("  • %s: %s\n", result.Rule.Field, result.Issue)
+			if result.Fix != "" {
+				fmt.Printf("    Fix: %s\n", result.Fix)
+			}
+			if result.Example != "" {
+				fmt.Printf("    Example: %s\n", result.Example)
+			}
+		}
+		return fmt.Errorf("configuration validation failed with %d errors", report.ErrorCount)
 	}
 
-	// Show successful validation results
+	// Handle warnings
+	if report.WarningCount > 0 {
+		if strict {
+			fmt.Println("❌ Configuration validation failed (strict mode - warnings treated as errors):")
+			for _, result := range report.Warnings {
+				fmt.Printf("  • %s: %s\n", result.Rule.Field, result.Issue)
+				if result.Fix != "" {
+					fmt.Printf("    Fix: %s\n", result.Fix)
+				}
+			}
+			return fmt.Errorf("configuration validation failed with %d warnings in strict mode", report.WarningCount)
+		} else {
+			fmt.Println("⚠️  Configuration validation passed with warnings:")
+			for _, result := range report.Warnings {
+				fmt.Printf("  • %s: %s\n", result.Rule.Field, result.Issue)
+				if result.Fix != "" {
+					fmt.Printf("    Recommendation: %s\n", result.Fix)
+				}
+			}
+		}
+	}
+
+	// Success message
 	fmt.Println("✅ Configuration is valid!")
-	
-	// Display summary of key settings
+
+	// Environment info
+	if environment != "" {
+		fmt.Printf("🌍 Environment: %s\n", environment)
+	}
+
+	// Display validation summary
+	fmt.Printf("📊 Validation Summary: %d rules checked, %d passed, %d warnings, %d errors\n",
+		report.TotalRules, len(report.Passed), report.WarningCount, report.ErrorCount)
+
+	// Display configuration summary
 	fmt.Println("\n📋 Configuration Summary:")
 	fmt.Printf("   GitHub Repository: %s/%s\n", cfg.GitHub.Owner, cfg.GitHub.Repo)
 	fmt.Printf("   Claude Model: %s\n", cfg.Claude.Model)
 	fmt.Printf("   Max Tokens: %d\n", cfg.Claude.MaxTokens)
 	fmt.Printf("   Workspace Directory: %s\n", cfg.Agents.Developer.WorkspaceDir)
 	fmt.Printf("   State Directory: %s\n", cfg.State.Dir)
-	
+
 	// Show agent status
 	fmt.Printf("   Developer Agent: %s\n", enabledStatus(cfg.Agents.Developer.Enabled))
 	fmt.Printf("   Creativity Mode: %s\n", enabledStatus(cfg.Creativity.Enabled))
@@ -93,7 +174,21 @@ func runValidate(cmd *cobra.Command, args []string) error {
 	checkEnvVar("ANTHROPIC_API_KEY", cfg.Claude.APIKey)
 
 	// Network validation results
-	if !skipNetworkFlag && fullValidateFlag {
+	networkValidated := false
+	for _, result := range report.Passed {
+		if result.Rule.Category == config.CategoryNetwork {
+			networkValidated = true
+			break
+		}
+	}
+	for _, result := range report.Failed {
+		if result.Rule.Category == config.CategoryNetwork {
+			networkValidated = true
+			break
+		}
+	}
+
+	if networkValidated {
 		fmt.Println("\n🌐 Network Connectivity: Validated")
 	} else if skipNetworkFlag {
 		fmt.Println("\n🌐 Network Connectivity: Skipped (use --full for network validation)")
@@ -114,7 +209,7 @@ func formatValidationError(err error) string {
 	type multiError interface {
 		Unwrap() []error
 	}
-	
+
 	lines := []string{}
 	if multiErr, ok := err.(multiError); ok {
 		errs := multiErr.Unwrap()

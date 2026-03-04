@@ -52,7 +52,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	// Initialize log rotation and cleanup managers
 	var rotationManager *observability.LogRotationManager
 	var cleanupManager *observability.LogCleanupManager
-	
+
 	if cfg.Logging.FilePath != "" {
 		if cfg.Logging.Rotation.Enabled {
 			rotationManager = observability.NewLogRotationManager(cfg.Logging.Rotation)
@@ -121,7 +121,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	// Run orchestrator with graceful shutdown support.
 	orch := orchestrator.New(agents, logger).WithObservability(structuredLogger, metrics)
-	
+
 	// Add log management to orchestrator if configured
 	if rotationManager != nil {
 		orch = orch.WithLogRotation(rotationManager)
@@ -132,7 +132,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	if cfg.Logging.FilePath != "" {
 		orch = orch.WithLogFilePath(cfg.Logging.FilePath)
 	}
-	
+
 	shutdownManager := orchestrator.NewShutdownManager(agents, store, cfg, logger).
 		WithObservability(structuredLogger)
 
@@ -152,23 +152,23 @@ func runStart(cmd *cobra.Command, args []string) error {
 	case <-ctx.Done():
 		// Signal received, perform graceful shutdown
 		logger.Info("shutdown signal received, initiating graceful shutdown")
-		
+
 		// Start force shutdown timer
 		forceCtx, forceCancel := context.WithTimeout(context.Background(), cfg.Shutdown.Timeout+10*time.Second)
 		defer forceCancel()
-		
+
 		go func() {
 			<-forceCtx.Done()
 			if forceCtx.Err() == context.DeadlineExceeded {
 				shutdownManager.ForceShutdown("shutdown timeout exceeded")
 			}
 		}()
-		
+
 		// Perform graceful shutdown
 		if err := shutdownManager.Shutdown(context.Background()); err != nil {
 			logger.Error("graceful shutdown failed", "error", err)
 		}
-		
+
 		// Wait for orchestrator to finish
 		select {
 		case <-errCh:

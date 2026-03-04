@@ -50,10 +50,10 @@ type AgentsConfig struct {
 
 // DeveloperAgentConfig holds developer agent settings.
 type DeveloperAgentConfig struct {
-	Enabled       bool             `mapstructure:"enabled"`
-	MaxConcurrent int              `mapstructure:"max_concurrent"`
-	WorkspaceDir  string           `mapstructure:"workspace_dir"`
-	Recovery      RecoveryConfig   `mapstructure:"recovery"`
+	Enabled       bool                     `mapstructure:"enabled"`
+	MaxConcurrent int                      `mapstructure:"max_concurrent"`
+	WorkspaceDir  string                   `mapstructure:"workspace_dir"`
+	Recovery      RecoveryConfig           `mapstructure:"recovery"`
 	Workspace     DeveloperWorkspaceConfig `mapstructure:"workspace"`
 }
 
@@ -81,55 +81,55 @@ type StateConfig struct {
 
 // LoggingConfig holds logging configuration.
 type LoggingConfig struct {
-	Level              string                    `mapstructure:"level"`
-	Format             string                    `mapstructure:"format"`
-	FilePath           string                    `mapstructure:"file_path"`
-	EnableCorrelation  bool                      `mapstructure:"enable_correlation"`
-	Sampling           LoggingSamplingConfig     `mapstructure:"sampling"`
-	Components         map[string]string         `mapstructure:"components"`
-	StructuredLogging  StructuredLoggingConfig   `mapstructure:"structured_logging"`
-	MultiAgentObserve  MultiAgentObservability   `mapstructure:"multi_agent_observability"`
-	Rotation           LogRotationConfig         `mapstructure:"rotation"`
-	Cleanup            LogCleanupConfig          `mapstructure:"cleanup"`
+	Level             string                  `mapstructure:"level"`
+	Format            string                  `mapstructure:"format"`
+	FilePath          string                  `mapstructure:"file_path"`
+	EnableCorrelation bool                    `mapstructure:"enable_correlation"`
+	Sampling          LoggingSamplingConfig   `mapstructure:"sampling"`
+	Components        map[string]string       `mapstructure:"components"`
+	StructuredLogging StructuredLoggingConfig `mapstructure:"structured_logging"`
+	MultiAgentObserve MultiAgentObservability `mapstructure:"multi_agent_observability"`
+	Rotation          LogRotationConfig       `mapstructure:"rotation"`
+	Cleanup           LogCleanupConfig        `mapstructure:"cleanup"`
 }
 
 // StructuredLoggingConfig holds structured logging configuration
 type StructuredLoggingConfig struct {
-	Enabled                bool                        `mapstructure:"enabled"`
-	Format                 string                      `mapstructure:"format"`
-	IncludeCaller          bool                        `mapstructure:"include_caller"`
-	IncludeStackTrace      bool                        `mapstructure:"include_stack_trace"`
-	Correlation            CorrelationConfig           `mapstructure:"correlation"`
-	WorkflowTracking       WorkflowTrackingConfig      `mapstructure:"workflow_tracking"`
-	Performance            PerformanceLoggingConfig    `mapstructure:"performance"`
-	Filtering              LogFilteringConfig          `mapstructure:"filtering"`
-	Export                 LogExportConfig             `mapstructure:"export"`
+	Enabled           bool                     `mapstructure:"enabled"`
+	Format            string                   `mapstructure:"format"`
+	IncludeCaller     bool                     `mapstructure:"include_caller"`
+	IncludeStackTrace bool                     `mapstructure:"include_stack_trace"`
+	Correlation       CorrelationConfig        `mapstructure:"correlation"`
+	WorkflowTracking  WorkflowTrackingConfig   `mapstructure:"workflow_tracking"`
+	Performance       PerformanceLoggingConfig `mapstructure:"performance"`
+	Filtering         LogFilteringConfig       `mapstructure:"filtering"`
+	Export            LogExportConfig          `mapstructure:"export"`
 }
 
 // CorrelationConfig holds correlation context configuration
 type CorrelationConfig struct {
-	Enabled                 bool `mapstructure:"enabled"`
-	AutoGenerate            bool `mapstructure:"auto_generate"`
-	IncludeWorkflowStage    bool `mapstructure:"include_workflow_stage"`
-	IncludeAgentMetadata    bool `mapstructure:"include_agent_metadata"`
-	PropagateGitHubContext  bool `mapstructure:"propagate_github_context"`
+	Enabled                bool `mapstructure:"enabled"`
+	AutoGenerate           bool `mapstructure:"auto_generate"`
+	IncludeWorkflowStage   bool `mapstructure:"include_workflow_stage"`
+	IncludeAgentMetadata   bool `mapstructure:"include_agent_metadata"`
+	PropagateGitHubContext bool `mapstructure:"propagate_github_context"`
 }
 
 // WorkflowTrackingConfig holds workflow tracking configuration
 type WorkflowTrackingConfig struct {
-	Enabled           bool `mapstructure:"enabled"`
-	TrackHandoffs     bool `mapstructure:"track_handoffs"`
-	TrackDecisions    bool `mapstructure:"track_decisions"`
+	Enabled            bool `mapstructure:"enabled"`
+	TrackHandoffs      bool `mapstructure:"track_handoffs"`
+	TrackDecisions     bool `mapstructure:"track_decisions"`
 	IncludePerformance bool `mapstructure:"include_performance"`
-	TrackToolUsage    bool `mapstructure:"track_tool_usage"`
+	TrackToolUsage     bool `mapstructure:"track_tool_usage"`
 }
 
 // PerformanceLoggingConfig holds performance logging configuration
 type PerformanceLoggingConfig struct {
-	TrackDurations    bool `mapstructure:"track_durations"`
-	MemorySnapshots   bool `mapstructure:"memory_snapshots"`
-	LLMMetrics        bool `mapstructure:"llm_metrics"`
-	WorkflowTiming    bool `mapstructure:"workflow_timing"`
+	TrackDurations  bool `mapstructure:"track_durations"`
+	MemorySnapshots bool `mapstructure:"memory_snapshots"`
+	LLMMetrics      bool `mapstructure:"llm_metrics"`
+	WorkflowTiming  bool `mapstructure:"workflow_timing"`
 }
 
 // LogFilteringConfig holds log filtering configuration
@@ -142,25 +142,25 @@ type LogFilteringConfig struct {
 
 // LogExportConfig holds log export configuration
 type LogExportConfig struct {
-	Enabled       bool                               `mapstructure:"enabled"`
-	FieldMappings map[string]map[string]string       `mapstructure:"field_mappings"`
+	Enabled       bool                         `mapstructure:"enabled"`
+	FieldMappings map[string]map[string]string `mapstructure:"field_mappings"`
 }
 
 // MultiAgentObservability holds multi-agent observability configuration
 type MultiAgentObservability struct {
-	CrossAgentTracking      bool                      `mapstructure:"cross_agent_tracking"`
-	CommunicationPatterns   bool                      `mapstructure:"communication_patterns"`
-	PerformanceComparison   bool                      `mapstructure:"performance_comparison"`
-	WorkflowEfficiency      bool                      `mapstructure:"workflow_efficiency"`
-	Alerting                MultiAgentAlertingConfig  `mapstructure:"alerting"`
+	CrossAgentTracking    bool                     `mapstructure:"cross_agent_tracking"`
+	CommunicationPatterns bool                     `mapstructure:"communication_patterns"`
+	PerformanceComparison bool                     `mapstructure:"performance_comparison"`
+	WorkflowEfficiency    bool                     `mapstructure:"workflow_efficiency"`
+	Alerting              MultiAgentAlertingConfig `mapstructure:"alerting"`
 }
 
 // MultiAgentAlertingConfig holds alerting configuration for multi-agent issues
 type MultiAgentAlertingConfig struct {
-	LostCorrelationThreshold     float64 `mapstructure:"lost_correlation_threshold"`
-	HandoffTimeoutSeconds        int     `mapstructure:"handoff_timeout_seconds"`
-	StageStallThresholdSeconds   int     `mapstructure:"stage_stall_threshold_seconds"`
-	ToolFailureRateThreshold     float64 `mapstructure:"tool_failure_rate_threshold"`
+	LostCorrelationThreshold   float64 `mapstructure:"lost_correlation_threshold"`
+	HandoffTimeoutSeconds      int     `mapstructure:"handoff_timeout_seconds"`
+	StageStallThresholdSeconds int     `mapstructure:"stage_stall_threshold_seconds"`
+	ToolFailureRateThreshold   float64 `mapstructure:"tool_failure_rate_threshold"`
 }
 
 // LoggingSamplingConfig holds log sampling configuration.
@@ -190,9 +190,9 @@ type LogCleanupConfig struct {
 
 // MetricsConfig holds metrics collection configuration.
 type MetricsConfig struct {
-	Enabled            bool                      `mapstructure:"enabled"`
-	CollectionInterval time.Duration             `mapstructure:"collection_interval"`
-	Export             MetricsExportConfig       `mapstructure:"export"`
+	Enabled            bool                `mapstructure:"enabled"`
+	CollectionInterval time.Duration       `mapstructure:"collection_interval"`
+	Export             MetricsExportConfig `mapstructure:"export"`
 }
 
 // MetricsExportConfig holds metrics export configuration.
@@ -236,9 +236,9 @@ type HealthConfig struct {
 
 // PerformanceConfig holds performance monitoring configuration.
 type PerformanceConfig struct {
-	TrackDurations     bool          `mapstructure:"track_durations"`
-	MemoryMonitoring   bool          `mapstructure:"memory_monitoring"`
-	Interval           time.Duration `mapstructure:"interval"`
+	TrackDurations   bool          `mapstructure:"track_durations"`
+	MemoryMonitoring bool          `mapstructure:"memory_monitoring"`
+	Interval         time.Duration `mapstructure:"interval"`
 }
 
 // CreativityConfig holds configuration for the creativity engine.
@@ -266,14 +266,14 @@ type ShutdownConfig struct {
 
 // ErrorHandlingConfig holds configuration for error handling and retry mechanisms.
 type ErrorHandlingConfig struct {
-	Retry         RetryConfig         `mapstructure:"retry"`
+	Retry          RetryConfig               `mapstructure:"retry"`
 	CircuitBreaker CircuitBreakerGroupConfig `mapstructure:"circuit_breaker"`
 }
 
 // RetryConfig holds global retry configuration.
 type RetryConfig struct {
-	Enabled       bool                       `mapstructure:"enabled"`
-	DefaultPolicy RetryPolicyConfig          `mapstructure:"default"`
+	Enabled       bool                         `mapstructure:"enabled"`
+	DefaultPolicy RetryPolicyConfig            `mapstructure:"default"`
 	Policies      map[string]RetryPolicyConfig `mapstructure:"policies"`
 }
 
@@ -289,9 +289,9 @@ type RetryPolicyConfig struct {
 
 // CircuitBreakerGroupConfig holds configuration for multiple circuit breakers.
 type CircuitBreakerGroupConfig struct {
-	Enabled      bool                              `mapstructure:"enabled"`
-	DefaultConfig CircuitBreakerConfigSpec          `mapstructure:"default"`
-	Breakers     map[string]CircuitBreakerConfigSpec `mapstructure:"breakers"`
+	Enabled       bool                                `mapstructure:"enabled"`
+	DefaultConfig CircuitBreakerConfigSpec            `mapstructure:"default"`
+	Breakers      map[string]CircuitBreakerConfigSpec `mapstructure:"breakers"`
 }
 
 // CircuitBreakerConfigSpec holds circuit breaker configuration.
@@ -305,23 +305,23 @@ type CircuitBreakerConfigSpec struct {
 
 // WorkspaceConfig holds workspace management configuration.
 type WorkspaceConfig struct {
-	Cleanup    WorkspaceCleanupConfig `mapstructure:"cleanup"`
-	Limits     WorkspaceLimitsConfig  `mapstructure:"limits"`
+	Cleanup    WorkspaceCleanupConfig    `mapstructure:"cleanup"`
+	Limits     WorkspaceLimitsConfig     `mapstructure:"limits"`
 	Monitoring WorkspaceMonitoringConfig `mapstructure:"monitoring"`
 }
 
 // WorkspaceCleanupConfig holds workspace cleanup configuration.
 type WorkspaceCleanupConfig struct {
-	Enabled           bool          `mapstructure:"enabled"`
-	SuccessRetention  time.Duration `mapstructure:"success_retention"`
-	FailureRetention  time.Duration `mapstructure:"failure_retention"`
-	MaxConcurrent     int           `mapstructure:"max_concurrent"`
+	Enabled          bool          `mapstructure:"enabled"`
+	SuccessRetention time.Duration `mapstructure:"success_retention"`
+	FailureRetention time.Duration `mapstructure:"failure_retention"`
+	MaxConcurrent    int           `mapstructure:"max_concurrent"`
 }
 
 // WorkspaceLimitsConfig holds workspace resource limits.
 type WorkspaceLimitsConfig struct {
-	MaxSizeMB       int64 `mapstructure:"max_size_mb"`
-	MinFreeDiskMB   int64 `mapstructure:"min_free_disk_mb"`
+	MaxSizeMB     int64 `mapstructure:"max_size_mb"`
+	MinFreeDiskMB int64 `mapstructure:"min_free_disk_mb"`
 }
 
 // WorkspaceMonitoringConfig holds workspace monitoring configuration.
@@ -332,12 +332,12 @@ type WorkspaceMonitoringConfig struct {
 
 // RecoveryConfig holds configuration for recovery operations.
 type RecoveryConfig struct {
-	Enabled               bool              `mapstructure:"enabled"`
-	StartupValidation     bool              `mapstructure:"startup_validation"`
-	AutoCleanupOrphaned   bool              `mapstructure:"auto_cleanup_orphaned"`
-	MaxResumeAge          time.Duration     `mapstructure:"max_resume_age"`
-	ValidationInterval    time.Duration     `mapstructure:"validation_interval"`
-	Consistency           ConsistencyConfig `mapstructure:"consistency"`
+	Enabled             bool              `mapstructure:"enabled"`
+	StartupValidation   bool              `mapstructure:"startup_validation"`
+	AutoCleanupOrphaned bool              `mapstructure:"auto_cleanup_orphaned"`
+	MaxResumeAge        time.Duration     `mapstructure:"max_resume_age"`
+	ValidationInterval  time.Duration     `mapstructure:"validation_interval"`
+	Consistency         ConsistencyConfig `mapstructure:"consistency"`
 }
 
 // ConsistencyConfig holds configuration for consistency validation.
@@ -453,4 +453,21 @@ func LoadWithSchemaValidation(path string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// LoadWithEnvironment loads configuration with environment-specific overlays
+func LoadWithEnvironment(basePath string, environment string) (*Config, error) {
+	envManager := NewEnvironmentManager()
+	cfg, err := envManager.LoadEnvironmentConfig(basePath, environment)
+	if err != nil {
+		return nil, fmt.Errorf("loading environment config: %w", err)
+	}
+
+	// Run standard validation
+	ctx := context.Background()
+	if err := ValidateWithContext(ctx, cfg, false); err != nil {
+		return nil, fmt.Errorf("validating environment config: %w", err)
+	}
+
+	return cfg, nil
 }

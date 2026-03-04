@@ -78,7 +78,7 @@ func NewStructuredLoggerWithConfig(cfg config.LoggingConfig, appConfig *config.C
 	// Setup file-based logging if file path is specified
 	if cfg.FilePath != "" {
 		var logFilePath string
-		
+
 		// Use repo-specific path if config is provided
 		if appConfig != nil {
 			baseLogDir := filepath.Dir(cfg.FilePath)
@@ -88,7 +88,7 @@ func NewStructuredLoggerWithConfig(cfg config.LoggingConfig, appConfig *config.C
 		} else {
 			logFilePath = cfg.FilePath
 		}
-		
+
 		// Create log directory if it doesn't exist
 		logDir := filepath.Dir(logFilePath)
 		if err := os.MkdirAll(logDir, 0755); err == nil {

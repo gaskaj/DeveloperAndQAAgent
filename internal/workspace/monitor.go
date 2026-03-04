@@ -12,9 +12,9 @@ import (
 
 // DiskStats represents disk usage statistics.
 type DiskStats struct {
-	TotalMB     int64 `json:"total_mb"`
-	UsedMB      int64 `json:"used_mb"`
-	AvailableMB int64 `json:"available_mb"`
+	TotalMB      int64   `json:"total_mb"`
+	UsedMB       int64   `json:"used_mb"`
+	AvailableMB  int64   `json:"available_mb"`
 	UsagePercent float64 `json:"usage_percent"`
 }
 
@@ -41,13 +41,13 @@ func (m *Monitor) CheckDiskSpace(ctx context.Context, requiredMB int64) error {
 
 	// Check minimum free disk space requirement
 	if stats.AvailableMB < m.config.MinFreeDiskMB {
-		return fmt.Errorf("insufficient disk space: %d MB available, %d MB minimum required", 
+		return fmt.Errorf("insufficient disk space: %d MB available, %d MB minimum required",
 			stats.AvailableMB, m.config.MinFreeDiskMB)
 	}
 
 	// Check if there's enough space for the requested operation
 	if stats.AvailableMB < requiredMB {
-		return fmt.Errorf("insufficient disk space for operation: %d MB available, %d MB required", 
+		return fmt.Errorf("insufficient disk space for operation: %d MB available, %d MB required",
 			stats.AvailableMB, requiredMB)
 	}
 

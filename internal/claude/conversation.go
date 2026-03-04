@@ -237,7 +237,7 @@ func (c *Conversation) SerializeConversation() (*ConversationState, error) {
 
 // RestoreConversation restores conversation state from serialized data.
 func (c *Conversation) RestoreConversation(state *ConversationState) error {
-	c.logger.Info("restoring conversation state", 
+	c.logger.Info("restoring conversation state",
 		"message_count", state.MessageCount,
 		"last_interaction", state.LastInteraction,
 	)
@@ -274,14 +274,14 @@ func (c *Conversation) compressMessageHistory() (string, error) {
 	// Note: MessageParam is an interface, so we can't directly type-assert to concrete types
 	// We'll create a simple summary based on message count and structure
 	summaryLines := make([]string, 0, len(c.messages))
-	
+
 	for i := range c.messages {
 		// Since we can't directly inspect the content without type assertions,
 		// we'll create a generic summary
 		summaryLines = append(summaryLines, fmt.Sprintf("Message[%d]: conversation turn", i))
 	}
 
-	return fmt.Sprintf("Conversation summary (%d messages):\n%v", 
+	return fmt.Sprintf("Conversation summary (%d messages):\n%v",
 		len(c.messages), summaryLines), nil
 }
 
@@ -289,9 +289,9 @@ func (c *Conversation) compressMessageHistory() (string, error) {
 func (c *Conversation) restoreMessageHistory(compressedHistory string) error {
 	// In a simplified implementation, we don't restore the full message history
 	// but use the compressed history as context for the next conversation
-	c.logger.Info("conversation history context available", 
+	c.logger.Info("conversation history context available",
 		"compressed_size", len(compressedHistory))
-	
+
 	// Reset messages since we can't fully restore them
 	c.messages = nil
 	return nil

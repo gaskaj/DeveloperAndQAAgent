@@ -49,21 +49,21 @@ type CheckAnnotation struct {
 
 // PRValidationOptions configures PR validation behavior
 type PRValidationOptions struct {
-	MaxWaitTime    time.Duration // Maximum time to wait for checks to complete
-	PollInterval   time.Duration // Initial polling interval
-	MaxRetries     int           // Maximum number of fix attempts
-	BackoffFactor  float64       // Exponential backoff multiplier
-	MaxPollTime    time.Duration // Maximum polling interval
+	MaxWaitTime   time.Duration // Maximum time to wait for checks to complete
+	PollInterval  time.Duration // Initial polling interval
+	MaxRetries    int           // Maximum number of fix attempts
+	BackoffFactor float64       // Exponential backoff multiplier
+	MaxPollTime   time.Duration // Maximum polling interval
 }
 
 // DefaultPRValidationOptions returns sensible defaults for PR validation
 func DefaultPRValidationOptions() PRValidationOptions {
 	return PRValidationOptions{
 		MaxWaitTime:   30 * time.Minute, // Wait up to 30 minutes for checks
-		PollInterval:  30 * time.Second,  // Start with 30 second polls
-		MaxRetries:    3,                 // Try up to 3 times to fix failures
-		BackoffFactor: 1.5,               // Increase poll time by 1.5x each time
-		MaxPollTime:   5 * time.Minute,   // Cap polling at 5 minutes
+		PollInterval:  30 * time.Second, // Start with 30 second polls
+		MaxRetries:    3,                // Try up to 3 times to fix failures
+		BackoffFactor: 1.5,              // Increase poll time by 1.5x each time
+		MaxPollTime:   5 * time.Minute,  // Cap polling at 5 minutes
 	}
 }
 
@@ -75,7 +75,7 @@ func (c *GitHubClient) ValidatePR(ctx context.Context, prNumber int, opts PRVali
 
 	timeout := time.After(opts.MaxWaitTime)
 	pollInterval := opts.PollInterval
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -102,7 +102,7 @@ func (c *GitHubClient) ValidatePR(ctx context.Context, prNumber int, opts PRVali
 
 		// Still pending or running, wait and try again
 		time.Sleep(pollInterval)
-		
+
 		// Exponential backoff with cap
 		pollInterval = time.Duration(float64(pollInterval) * opts.BackoffFactor)
 		if pollInterval > opts.MaxPollTime {
@@ -154,7 +154,7 @@ func (c *GitHubClient) analyzeCheckResults(checkRuns []*github.CheckRun, commitS
 	// Analyze check runs
 	for _, check := range checkRuns {
 		checkName := check.GetName()
-		
+
 		switch check.GetStatus() {
 		case "queued", "in_progress":
 			result.PendingChecks = append(result.PendingChecks, checkName)
@@ -167,14 +167,14 @@ func (c *GitHubClient) analyzeCheckResults(checkRuns []*github.CheckRun, commitS
 			case "failure", "cancelled", "timed_out":
 				result.AllChecksPassing = false
 				result.Status = PRCheckStatusFailed
-				
+
 				failure := CheckFailure{
 					Name:       checkName,
 					Conclusion: check.GetConclusion(),
 					Summary:    check.GetOutput().GetSummary(),
 					DetailsURL: check.GetDetailsURL(),
 				}
-				
+
 				// Get annotations if available
 				if check.GetOutput() != nil {
 					for _, annotation := range check.GetOutput().Annotations {
@@ -187,7 +187,7 @@ func (c *GitHubClient) analyzeCheckResults(checkRuns []*github.CheckRun, commitS
 						})
 					}
 				}
-				
+
 				result.FailedChecks = append(result.FailedChecks, failure)
 			case "action_required":
 				result.PendingChecks = append(result.PendingChecks, checkName+" (action required)")
@@ -200,7 +200,7 @@ func (c *GitHubClient) analyzeCheckResults(checkRuns []*github.CheckRun, commitS
 	// Analyze legacy status checks
 	for _, status := range commitStatus.Statuses {
 		statusName := status.GetContext()
-		
+
 		switch status.GetState() {
 		case "pending":
 			result.PendingChecks = append(result.PendingChecks, statusName)
@@ -211,7 +211,7 @@ func (c *GitHubClient) analyzeCheckResults(checkRuns []*github.CheckRun, commitS
 		case "failure", "error":
 			result.AllChecksPassing = false
 			result.Status = PRCheckStatusFailed
-			
+
 			failure := CheckFailure{
 				Name:       statusName,
 				Conclusion: status.GetState(),
@@ -244,32 +244,32 @@ func (r *PRValidationResult) AnalyzeFailures() string {
 
 	var analysis strings.Builder
 	analysis.WriteString("## Check Failures Analysis\n\n")
-	
+
 	for i, failure := range r.FailedChecks {
 		if i > 0 {
 			analysis.WriteString("\n---\n\n")
 		}
-		
+
 		analysis.WriteString(fmt.Sprintf("### %s (%s)\n\n", failure.Name, failure.Conclusion))
-		
+
 		if failure.Summary != "" {
 			analysis.WriteString(fmt.Sprintf("**Summary:** %s\n\n", failure.Summary))
 		}
-		
+
 		if len(failure.Annotations) > 0 {
 			analysis.WriteString("**Issues found:**\n\n")
 			for _, annotation := range failure.Annotations {
-				analysis.WriteString(fmt.Sprintf("- `%s:%d`: %s\n", 
+				analysis.WriteString(fmt.Sprintf("- `%s:%d`: %s\n",
 					annotation.Filename, annotation.Line, annotation.Message))
 			}
 			analysis.WriteString("\n")
 		}
-		
+
 		if failure.DetailsURL != "" {
 			analysis.WriteString(fmt.Sprintf("[View detailed logs](%s)\n", failure.DetailsURL))
 		}
 	}
-	
+
 	return analysis.String()
 }
 
@@ -282,15 +282,15 @@ func (r *PRValidationResult) GenerateFixPrompt(issueContext, originalPlan string
 	var prompt strings.Builder
 	prompt.WriteString("## Pull Request Check Failures\n\n")
 	prompt.WriteString("The pull request has failing checks that need to be fixed. Here are the details:\n\n")
-	
+
 	prompt.WriteString(r.AnalyzeFailures())
-	
+
 	prompt.WriteString("\n\n## Original Issue Context\n\n")
 	prompt.WriteString(issueContext)
-	
+
 	prompt.WriteString("\n\n## Original Implementation Plan\n\n")
 	prompt.WriteString(originalPlan)
-	
+
 	prompt.WriteString("\n\n## Instructions\n\n")
 	prompt.WriteString("Please analyze the check failures and fix the issues. Focus on:\n\n")
 	prompt.WriteString("1. **Build errors**: Fix compilation issues, missing imports, syntax errors\n")

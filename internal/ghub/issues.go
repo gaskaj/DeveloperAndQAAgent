@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/go-github/v68/github"
 	agentErrors "github.com/gaskaj/DeveloperAndQAAgent/internal/errors"
+	"github.com/google/go-github/v68/github"
 )
 
 // ListIssues returns open issues matching the given labels.
@@ -59,7 +59,7 @@ func (c *GitHubClient) GetIssue(ctx context.Context, number int) (*github.Issue,
 			return c.getIssueCore(ctx, number)
 		})
 	}
-	
+
 	return c.getIssueCore(ctx, number)
 }
 
@@ -121,7 +121,7 @@ func (c *GitHubClient) CreateIssue(ctx context.Context, title, body string, labe
 			return c.createIssueCore(ctx, title, body, labels)
 		})
 	}
-	
+
 	return c.createIssueCore(ctx, title, body, labels)
 }
 

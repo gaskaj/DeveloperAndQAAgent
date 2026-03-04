@@ -35,11 +35,11 @@ type Agent interface {
 
 // StatusReport describes the current state of an agent.
 type StatusReport struct {
-	Type              AgentType     `json:"type"`
-	State             string        `json:"state"`
-	IssueID           int           `json:"issue_id,omitempty"`
-	Message           string        `json:"message"`
-	WorkspaceStats    *WorkspaceStats `json:"workspace_stats,omitempty"`
+	Type           AgentType       `json:"type"`
+	State          string          `json:"state"`
+	IssueID        int             `json:"issue_id,omitempty"`
+	Message        string          `json:"message"`
+	WorkspaceStats *WorkspaceStats `json:"workspace_stats,omitempty"`
 }
 
 // WorkspaceStats represents workspace usage statistics for the status report.
@@ -52,14 +52,14 @@ type WorkspaceStats struct {
 
 // Dependencies holds shared dependencies injected into agents.
 type Dependencies struct {
-	Config            *config.Config
-	GitHub            ghub.Client
-	Claude            *claude.Client
-	Store             state.Store
-	Logger            *slog.Logger
-	StructuredLogger  *observability.StructuredLogger
-	Metrics           *observability.Metrics
-	ErrorManager      *errors.Manager
+	Config           *config.Config
+	GitHub           ghub.Client
+	Claude           *claude.Client
+	Store            state.Store
+	Logger           *slog.Logger
+	StructuredLogger *observability.StructuredLogger
+	Metrics          *observability.Metrics
+	ErrorManager     *errors.Manager
 }
 
 // BaseAgent provides common functionality for all agents.

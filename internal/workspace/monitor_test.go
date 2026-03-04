@@ -58,7 +58,7 @@ func TestMonitor_CheckDiskSpace_MinimumRequirement(t *testing.T) {
 	tempDir := t.TempDir()
 	config := ManagerConfig{
 		BaseDir:       tempDir,
-		MinFreeDiskMB: 1024*1024*1024, // Very large minimum to trigger failure
+		MinFreeDiskMB: 1024 * 1024 * 1024, // Very large minimum to trigger failure
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))

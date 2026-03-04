@@ -30,10 +30,10 @@ func TestValidate_RequiredFields(t *testing.T) {
 
 func TestValidate_TokenFormats(t *testing.T) {
 	tests := []struct {
-		name           string
-		githubToken    string
-		claudeAPIKey   string
-		expectGHError  bool
+		name              string
+		githubToken       string
+		claudeAPIKey      string
+		expectGHError     bool
 		expectClaudeError bool
 	}{
 		{
@@ -42,13 +42,13 @@ func TestValidate_TokenFormats(t *testing.T) {
 			claudeAPIKey: "sk-ant-api03-1234567890123456789012345678901234567890",
 		},
 		{
-			name:           "invalid github token format",
-			githubToken:    "invalid_token_format",
-			claudeAPIKey:   "sk-ant-api03-validkey",
-			expectGHError:  true,
+			name:          "invalid github token format",
+			githubToken:   "invalid_token_format",
+			claudeAPIKey:  "sk-ant-api03-validkey",
+			expectGHError: true,
 		},
 		{
-			name:              "invalid claude key format", 
+			name:              "invalid claude key format",
 			githubToken:       "ghp_validtoken",
 			claudeAPIKey:      "invalid_key_format",
 			expectClaudeError: true,
@@ -170,9 +170,9 @@ func TestValidate_WorkspacePermissions(t *testing.T) {
 			require.Error(t, err)
 			errStr := err.Error()
 			// Should contain either workspace_dir or state.dir error
-			assert.True(t, 
+			assert.True(t,
 				strings.Contains(errStr, "agents.developer.workspace_dir") ||
-				strings.Contains(errStr, "state.dir"),
+					strings.Contains(errStr, "state.dir"),
 			)
 		}
 	})
@@ -213,12 +213,12 @@ func TestValidate_GitHubAccess(t *testing.T) {
 			Repo:  "testrepo",
 		}
 
-		// Note: This test would need to mock the GitHub client, 
+		// Note: This test would need to mock the GitHub client,
 		// which is complex. In practice, network validation should be optional.
 		// For now, we test the error structure.
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
-		
+
 		var errs ValidationErrors
 		validateGitHubAccess(ctx, cfg, &errs)
 		// With real GitHub API, this would fail since we're using a test token
@@ -260,8 +260,8 @@ func TestValidate_ClaudeAccess(t *testing.T) {
 			apiKey: "",
 		},
 		{
-			name:        "invalid key format",
-			apiKey:      "invalid_key",
+			name:   "invalid key format",
+			apiKey: "invalid_key",
 		},
 	}
 
@@ -297,7 +297,7 @@ func TestValidate_ClaudeAccess(t *testing.T) {
 
 func TestValidate_Defaults(t *testing.T) {
 	cfg := minimalValidConfig()
-	
+
 	// Clear some fields to test defaults
 	cfg.Claude.Model = ""
 	cfg.Claude.MaxTokens = 0

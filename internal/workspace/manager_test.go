@@ -292,3 +292,360 @@ func TestManagerConfig_Defaults(t *testing.T) {
 	assert.Equal(t, 1*time.Hour, config.CleanupInterval)
 	assert.True(t, config.CleanupEnabled)
 }
+
+func TestManager_GetWorkspace_NotFound(t *testing.T) {
+	tempDir := t.TempDir()
+	config := ManagerConfig{
+		BaseDir:       tempDir,
+		MaxSizeMB:     100,
+		MinFreeDiskMB: 50,
+		MaxConcurrent: 3,
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	manager, err := NewManager(config, logger)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	_, err = manager.GetWorkspace(ctx, 999)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "workspace not found")
+}
+
+func TestManager_UpdateWorkspaceState_NotFound(t *testing.T) {
+	tempDir := t.TempDir()
+	config := ManagerConfig{
+		BaseDir:       tempDir,
+		MaxSizeMB:     100,
+		MinFreeDiskMB: 50,
+		MaxConcurrent: 3,
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	manager, err := NewManager(config, logger)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	err = manager.UpdateWorkspaceState(ctx, 999, WorkspaceStateFailed)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "workspace not found")
+}
+
+func TestManager_UpdateWorkspaceState_Transitions(t *testing.T) {
+	tempDir := t.TempDir()
+	config := ManagerConfig{
+		BaseDir:       tempDir,
+		MaxSizeMB:     100,
+		MinFreeDiskMB: 50,
+		MaxConcurrent: 3,
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	manager, err := NewManager(config, logger)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	_, err = manager.CreateWorkspace(ctx, 1)
+	require.NoError(t, err)
+
+	// Active -> Failed
+	err = manager.UpdateWorkspaceState(ctx, 1, WorkspaceStateFailed)
+	require.NoError(t, err)
+
+	ws, err := manager.GetWorkspace(ctx, 1)
+	require.NoError(t, err)
+	assert.Equal(t, WorkspaceStateFailed, ws.State)
+
+	// Failed -> Stale
+	err = manager.UpdateWorkspaceState(ctx, 1, WorkspaceStateStale)
+	require.NoError(t, err)
+
+	ws, err = manager.GetWorkspace(ctx, 1)
+	require.NoError(t, err)
+	assert.Equal(t, WorkspaceStateStale, ws.State)
+}
+
+func TestManager_ListWorkspaces_AllStates(t *testing.T) {
+	tempDir := t.TempDir()
+	config := ManagerConfig{
+		BaseDir:       tempDir,
+		MaxSizeMB:     100,
+		MinFreeDiskMB: 50,
+		MaxConcurrent: 5,
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	manager, err := NewManager(config, logger)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	// Create workspaces with different states
+	_, err = manager.CreateWorkspace(ctx, 1)
+	require.NoError(t, err)
+	_, err = manager.CreateWorkspace(ctx, 2)
+	require.NoError(t, err)
+
+	err = manager.UpdateWorkspaceState(ctx, 2, WorkspaceStateFailed)
+	require.NoError(t, err)
+
+	// List all
+	all, err := manager.ListWorkspaces(ctx, "")
+	require.NoError(t, err)
+	assert.Len(t, all, 2)
+
+	// List active only
+	active, err := manager.ListWorkspaces(ctx, WorkspaceStateActive)
+	require.NoError(t, err)
+	assert.Len(t, active, 1)
+	assert.Equal(t, 1, active[0].ID)
+
+	// List failed only
+	failed, err := manager.ListWorkspaces(ctx, WorkspaceStateFailed)
+	require.NoError(t, err)
+	assert.Len(t, failed, 1)
+	assert.Equal(t, 2, failed[0].ID)
+}
+
+func TestManager_CleanupWorkspace_NotCached(t *testing.T) {
+	tempDir := t.TempDir()
+	config := ManagerConfig{
+		BaseDir:       tempDir,
+		MaxSizeMB:     100,
+		MinFreeDiskMB: 50,
+		MaxConcurrent: 3,
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	manager, err := NewManager(config, logger)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	// Create workspace directory manually (not through manager)
+	wsPath := filepath.Join(tempDir, "issue-999")
+	require.NoError(t, os.MkdirAll(wsPath, 0755))
+
+	// Cleanup should find it by path
+	err = manager.CleanupWorkspace(ctx, 999)
+	require.NoError(t, err)
+
+	_, err = os.Stat(wsPath)
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestManager_CleanupWorkspace_NotExist(t *testing.T) {
+	tempDir := t.TempDir()
+	config := ManagerConfig{
+		BaseDir:       tempDir,
+		MaxSizeMB:     100,
+		MinFreeDiskMB: 50,
+		MaxConcurrent: 3,
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	manager, err := NewManager(config, logger)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	// Cleanup non-existent workspace should succeed silently
+	err = manager.CleanupWorkspace(ctx, 999)
+	assert.NoError(t, err)
+}
+
+func TestManager_CleanupStaleWorkspaces_Disabled(t *testing.T) {
+	tempDir := t.TempDir()
+	config := ManagerConfig{
+		BaseDir:        tempDir,
+		MaxSizeMB:      100,
+		MinFreeDiskMB:  50,
+		MaxConcurrent:  3,
+		CleanupEnabled: false,
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	manager, err := NewManager(config, logger)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	err = manager.CleanupStaleWorkspaces(ctx, 1*time.Hour)
+	assert.NoError(t, err)
+}
+
+func TestManager_CleanupStaleWorkspaces_ContextCancellation(t *testing.T) {
+	tempDir := t.TempDir()
+	config := ManagerConfig{
+		BaseDir:        tempDir,
+		MaxSizeMB:      100,
+		MinFreeDiskMB:  50,
+		MaxConcurrent:  5,
+		CleanupEnabled: true,
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	manager, err := NewManager(config, logger)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Create stale workspaces
+	_, err = manager.CreateWorkspace(ctx, 1)
+	require.NoError(t, err)
+	err = manager.UpdateWorkspaceState(ctx, 1, WorkspaceStateStale)
+	require.NoError(t, err)
+
+	impl := manager.(*managerImpl)
+	impl.workspaces[1].UpdatedAt = time.Now().Add(-2 * time.Hour)
+
+	cancel()
+
+	err = manager.CleanupStaleWorkspaces(ctx, 1*time.Hour)
+	assert.Error(t, err) // Should return context error
+}
+
+func TestManager_GetWorkspace_CalculatesSize(t *testing.T) {
+	tempDir := t.TempDir()
+	config := ManagerConfig{
+		BaseDir:       tempDir,
+		MaxSizeMB:     100,
+		MinFreeDiskMB: 50,
+		MaxConcurrent: 3,
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	manager, err := NewManager(config, logger)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	ws, err := manager.CreateWorkspace(ctx, 1)
+	require.NoError(t, err)
+
+	// Write some files to the workspace
+	require.NoError(t, os.WriteFile(filepath.Join(ws.Path, "test.txt"), []byte("test content"), 0644))
+
+	// Get workspace should calculate size
+	ws, err = manager.GetWorkspace(ctx, 1)
+	require.NoError(t, err)
+	assert.NotNil(t, ws)
+	// Size should be calculated (will be 0 in MB since content is small)
+	assert.GreaterOrEqual(t, ws.SizeMB, int64(0))
+}
+
+func TestManager_GetWorkspaceStats_WithFailedWorkspaces(t *testing.T) {
+	tempDir := t.TempDir()
+	config := ManagerConfig{
+		BaseDir:       tempDir,
+		MaxSizeMB:     100,
+		MinFreeDiskMB: 50,
+		MaxConcurrent: 5,
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	manager, err := NewManager(config, logger)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	_, err = manager.CreateWorkspace(ctx, 1)
+	require.NoError(t, err)
+	_, err = manager.CreateWorkspace(ctx, 2)
+	require.NoError(t, err)
+	_, err = manager.CreateWorkspace(ctx, 3)
+	require.NoError(t, err)
+
+	err = manager.UpdateWorkspaceState(ctx, 2, WorkspaceStateFailed)
+	require.NoError(t, err)
+	err = manager.UpdateWorkspaceState(ctx, 3, WorkspaceStateStale)
+	require.NoError(t, err)
+
+	stats, err := manager.GetWorkspaceStats(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 3, stats.TotalWorkspaces)
+	assert.Equal(t, 1, stats.ActiveWorkspaces)
+	assert.Equal(t, 1, stats.FailedWorkspaces)
+	assert.Equal(t, 1, stats.StaleWorkspaces)
+	assert.True(t, stats.DiskFreeMB > 0)
+}
+
+func TestManager_NilLogger(t *testing.T) {
+	tempDir := t.TempDir()
+	config := ManagerConfig{
+		BaseDir:       tempDir,
+		MaxSizeMB:     100,
+		MinFreeDiskMB: 50,
+		MaxConcurrent: 3,
+	}
+
+	// Should use default logger when nil
+	manager, err := NewManager(config, nil)
+	require.NoError(t, err)
+	assert.NotNil(t, manager)
+}
+
+func TestManager_NewManagerWithAppConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	config := ManagerConfig{
+		BaseDir:       tempDir,
+		MaxSizeMB:     100,
+		MinFreeDiskMB: 50,
+		MaxConcurrent: 3,
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+	// Without app config
+	manager, err := NewManagerWithAppConfig(config, logger, nil)
+	require.NoError(t, err)
+	assert.NotNil(t, manager)
+}
+
+func TestManager_CalculateWorkspaceSize(t *testing.T) {
+	tempDir := t.TempDir()
+	config := ManagerConfig{
+		BaseDir:       tempDir,
+		MaxSizeMB:     100,
+		MinFreeDiskMB: 50,
+		MaxConcurrent: 3,
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	manager, err := NewManager(config, logger)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	ws, err := manager.CreateWorkspace(ctx, 1)
+	require.NoError(t, err)
+
+	// Write a file
+	require.NoError(t, os.WriteFile(filepath.Join(ws.Path, "test.txt"), []byte("hello world"), 0644))
+
+	impl := manager.(*managerImpl)
+	size, err := impl.calculateWorkspaceSize(ws.Path)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, size, int64(0)) // Small file rounds to 0 MB
+}
+
+func TestManager_CalculateWorkspaceSize_NonExistent(t *testing.T) {
+	tempDir := t.TempDir()
+	config := ManagerConfig{
+		BaseDir:       tempDir,
+		MaxSizeMB:     100,
+		MinFreeDiskMB: 50,
+		MaxConcurrent: 3,
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	manager, err := NewManager(config, logger)
+	require.NoError(t, err)
+
+	impl := manager.(*managerImpl)
+	_, err = impl.calculateWorkspaceSize("/nonexistent/path")
+	assert.Error(t, err)
+}

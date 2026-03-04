@@ -2,10 +2,12 @@ package gitops
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 )
 
@@ -113,4 +115,38 @@ func (r *Repo) Dir() string {
 // This is used by tests to construct Repo objects from locally-cloned repositories.
 func NewRepoFromWorktree(repo *git.Repository, wt *git.Worktree, dir, token string) *Repo {
 	return &Repo{repo: repo, worktree: wt, dir: dir, authToken: token}
+}
+
+// InitForTest initializes a new git repository at dir with an initial commit.
+// This is intended for testing scenarios where a real git repo is needed
+// without cloning from a remote.
+func InitForTest(dir, token string) (*Repo, error) {
+	repo, err := git.PlainInit(dir, false)
+	if err != nil {
+		return nil, fmt.Errorf("initializing test repo: %w", err)
+	}
+
+	wt, err := repo.Worktree()
+	if err != nil {
+		return nil, fmt.Errorf("getting worktree: %w", err)
+	}
+
+	// Stage all existing files
+	if _, err := wt.Add("."); err != nil {
+		return nil, fmt.Errorf("staging files: %w", err)
+	}
+
+	// Create initial commit
+	_, err = wt.Commit("Initial commit", &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "Test Agent",
+			Email: "test@test.com",
+			When:  time.Now(),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("creating initial commit: %w", err)
+	}
+
+	return &Repo{repo: repo, worktree: wt, dir: dir, authToken: token}, nil
 }
