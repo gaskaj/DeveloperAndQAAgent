@@ -454,3 +454,20 @@ func LoadWithSchemaValidation(path string) (*Config, error) {
 
 	return &cfg, nil
 }
+
+// LoadWithEnvironment loads configuration with environment-specific overlays
+func LoadWithEnvironment(basePath string, environment string) (*Config, error) {
+	envManager := NewEnvironmentManager()
+	cfg, err := envManager.LoadEnvironmentConfig(basePath, environment)
+	if err != nil {
+		return nil, fmt.Errorf("loading environment config: %w", err)
+	}
+	
+	// Run standard validation
+	ctx := context.Background()
+	if err := ValidateWithContext(ctx, cfg, false); err != nil {
+		return nil, fmt.Errorf("validating environment config: %w", err)
+	}
+	
+	return cfg, nil
+}

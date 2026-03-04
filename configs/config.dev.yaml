@@ -1,0 +1,108 @@
+# Development Environment Configuration
+# This file extends the base config.yaml for development environment
+
+github:
+  poll_interval: 15s  # Faster polling for development
+
+logging:
+  level: debug
+  format: text  # Easier to read during development
+  enable_correlation: true
+  structured_logging:
+    enabled: true
+    format: json
+    include_caller: true
+    include_stack_trace: false  # Enable for deep debugging if needed
+    correlation:
+      enabled: true
+      auto_generate: true
+      include_workflow_stage: true
+      include_agent_metadata: true
+    workflow_tracking:
+      enabled: true
+      track_handoffs: true
+      track_decisions: true
+      include_performance: true
+      track_tool_usage: true
+    performance:
+      track_durations: true
+      memory_snapshots: false  # Disable to reduce overhead in dev
+      llm_metrics: true
+      workflow_timing: true
+
+agents:
+  developer:
+    enabled: true
+    max_concurrent: 1  # Keep it simple for development
+    workspace_dir: ./dev-workspaces  # Separate dev workspace
+    recovery:
+      enabled: true
+      startup_validation: true
+      auto_cleanup_orphaned: true
+      max_resume_age: 2h  # Shorter for development
+      validation_interval: 30s
+
+creativity:
+  enabled: true
+  idle_threshold_seconds: 60   # Faster creativity triggering in dev
+  suggestion_cooldown_seconds: 120  # Shorter cooldown for testing
+  max_pending_suggestions: 2   # Allow more suggestions for testing
+  max_rejection_history: 10    # Smaller history for dev
+
+decomposition:
+  enabled: true
+  max_iteration_budget: 15     # Smaller budget for faster feedback
+  max_subtasks: 3              # Fewer subtasks for simpler testing
+
+metrics:
+  enabled: true
+  collection_interval: 15s     # More frequent metrics collection
+
+observability:
+  tracing:
+    enabled: true
+    sample_rate: 1.0           # Trace everything in dev
+  health:
+    enabled: true
+    port: 8080
+    path: /healthz
+  performance:
+    track_durations: true
+    memory_monitoring: true    # Enable for dev debugging
+    interval: 15s
+
+workspace:
+  cleanup:
+    enabled: true
+    success_retention: 30m     # Shorter retention for dev
+    failure_retention: 2h      # Keep failures longer for debugging
+    max_concurrent: 2
+  limits:
+    max_size_mb: 1024         # 1GB limit for dev
+    min_free_disk_mb: 2048    # 2GB minimum free
+  monitoring:
+    disk_check_interval: 30s
+    cleanup_interval: 5m      # More frequent cleanup in dev
+
+error_handling:
+  retry:
+    enabled: true
+    default:
+      max_attempts: 2         # Fewer retries for faster failure feedback
+      base_delay: 500ms
+      max_delay: 5s
+      backoff_factor: 2.0
+      jitter_factor: 0.1
+  circuit_breaker:
+    enabled: true
+    default:
+      max_failures: 3         # Fail faster in dev
+      timeout: 30s
+      max_requests: 1
+      failure_ratio: 0.5
+      min_requests: 2
+
+shutdown:
+  timeout: 30s               # Faster shutdown for dev
+  cleanup_workspaces: true
+  reset_claims: true

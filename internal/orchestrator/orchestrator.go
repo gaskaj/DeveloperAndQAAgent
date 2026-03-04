@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/agent"
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/workspace"
 	"golang.org/x/sync/errgroup"
@@ -21,6 +22,7 @@ type Orchestrator struct {
 	rotationManager  *observability.LogRotationManager
 	cleanupManager   *observability.LogCleanupManager
 	logFilePath      string
+	configManager    *config.ConfigManager
 }
 
 // New creates a new Orchestrator with the given agents.
@@ -62,6 +64,12 @@ func (o *Orchestrator) WithLogFilePath(logFilePath string) *Orchestrator {
 	return o
 }
 
+// WithConfigManager adds configuration management to the orchestrator
+func (o *Orchestrator) WithConfigManager(configManager *config.ConfigManager) *Orchestrator {
+	o.configManager = configManager
+	return o
+}
+
 // Run starts all agents concurrently and blocks until they all stop or the context is cancelled.
 // The context cancellation triggers graceful shutdown of all agents.
 func (o *Orchestrator) Run(ctx context.Context) error {
@@ -71,6 +79,19 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	// Log orchestrator start
 	if o.structuredLogger != nil {
 		o.structuredLogger.LogAgentStart(ctx, "orchestrator", "multi-agent system starting")
+	}
+	
+	// Start configuration manager watching if configured
+	if o.configManager != nil {
+		o.logger.Info("starting configuration manager")
+		if err := o.configManager.StartWatching(ctx); err != nil {
+			o.logger.Error("failed to start configuration watching", "error", err)
+		} else {
+			defer func() {
+				o.logger.Info("stopping configuration manager")
+				o.configManager.StopWatching()
+			}()
+		}
 	}
 	
 	g, ctx := errgroup.WithContext(ctx)

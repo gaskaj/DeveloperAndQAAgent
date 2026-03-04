@@ -1,0 +1,178 @@
+# Production Environment Configuration
+# This file extends the base config.yaml for production environment
+
+github:
+  poll_interval: 60s  # Conservative polling for production
+
+logging:
+  level: info  # No debug logging in production
+  format: json  # Structured logging for production
+  enable_correlation: true  # Required for production
+  file_path: /var/log/agentctl/agent.log  # System log path
+  rotation:
+    enabled: true
+    max_file_size_mb: 100
+    max_files: 10
+    max_age: 720h  # 30 days
+    compress_old: true
+    check_interval: 1h
+  cleanup:
+    enabled: true
+    retention_days: 90
+    min_free_disk_mb: 5120  # 5GB minimum free
+    cleanup_interval: 6h
+    archive_before_delete: true
+  structured_logging:
+    enabled: true  # Required for production
+    format: json
+    include_caller: false
+    include_stack_trace: false  # Never in production
+    correlation:
+      enabled: true
+      auto_generate: true
+      include_workflow_stage: true
+      include_agent_metadata: true
+      propagate_github_context: true
+    workflow_tracking:
+      enabled: true
+      track_handoffs: true
+      track_decisions: true
+      include_performance: true
+      track_tool_usage: true
+    performance:
+      track_durations: true
+      memory_snapshots: false  # Too much overhead for prod
+      llm_metrics: true
+      workflow_timing: true
+    filtering:
+      debug_sampling_rate: 0.0  # No debug logs in production
+      include_errors: true
+      include_warnings: true
+    export:
+      enabled: true
+      field_mappings:
+        datadog:
+          correlation_id: "dd.trace_id"
+          timestamp: "@timestamp"
+  multi_agent_observability:
+    cross_agent_tracking: true
+    communication_patterns: true
+    performance_comparison: true
+    workflow_efficiency: true
+    alerting:
+      lost_correlation_threshold: 0.05
+      handoff_timeout_seconds: 300
+      stage_stall_threshold_seconds: 1800
+      tool_failure_rate_threshold: 0.3
+
+agents:
+  developer:
+    enabled: true
+    max_concurrent: 3  # Reasonable concurrency for production
+    workspace_dir: /var/lib/agentctl/workspaces  # System workspace
+    recovery:
+      enabled: true  # Critical for production
+      startup_validation: true
+      auto_cleanup_orphaned: true
+      max_resume_age: 24h  # Longer for production stability
+      validation_interval: 5m
+    workspace:
+      persistence:
+        enabled: true
+        snapshot_interval: 10m
+        max_snapshots: 5
+        retention_hours: 48
+        compress_snapshots: true
+        resume_on_restart: true
+        validate_before_resume: true
+
+creativity:
+  enabled: false  # Typically disabled in production
+
+decomposition:
+  enabled: true
+  max_iteration_budget: 50   # Higher budget for production work
+  max_subtasks: 5
+
+metrics:
+  enabled: true  # Required for production
+  collection_interval: 60s
+  export:
+    prometheus:
+      enabled: true
+      port: 9090
+      path: /metrics
+    logs:
+      enabled: true
+      interval: 300s  # 5 minute intervals
+
+observability:
+  tracing:
+    enabled: true
+    sample_rate: 0.1  # Sample 10% to reduce overhead
+  health:
+    enabled: true
+    port: 8080
+    path: /healthz
+  performance:
+    track_durations: true
+    memory_monitoring: true
+    interval: 60s
+
+workspace:
+  cleanup:
+    enabled: true
+    success_retention: 24h      # Keep successful work for a day
+    failure_retention: 168h     # Keep failures for a week
+    max_concurrent: 2
+  limits:
+    max_size_mb: 5120          # 5GB limit per workspace
+    min_free_disk_mb: 10240    # 10GB minimum free
+  monitoring:
+    disk_check_interval: 5m
+    cleanup_interval: 1h
+
+error_handling:
+  retry:
+    enabled: true  # Required for production
+    default:
+      max_attempts: 5
+      base_delay: 2s
+      max_delay: 60s
+      backoff_factor: 2.0
+      jitter_factor: 0.2
+    policies:
+      github_api:
+        max_attempts: 8
+        base_delay: 5s
+        max_delay: 300s
+      claude_api:
+        max_attempts: 5
+        base_delay: 3s
+        max_delay: 120s
+  circuit_breaker:
+    enabled: true  # Required for production
+    default:
+      max_failures: 10
+      timeout: 300s  # 5 minutes
+      max_requests: 5
+      failure_ratio: 0.3
+      min_requests: 10
+    breakers:
+      github_api:
+        max_failures: 20
+        timeout: 600s
+        failure_ratio: 0.2
+      claude_api:
+        max_failures: 15
+        timeout: 180s
+        failure_ratio: 0.4
+
+shutdown:
+  timeout: 300s  # 5 minutes for graceful shutdown
+  cleanup_workspaces: false  # Don't cleanup on shutdown in prod
+  reset_claims: true
+
+state:
+  backend: file
+  dir: /var/lib/agentctl/state  # System state directory

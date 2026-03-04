@@ -233,6 +233,12 @@ func validateNetworkAccess(ctx context.Context, cfg *Config, errs *ValidationErr
 	validateClaudeAccess(ctx, &cfg.Claude, errs)
 }
 
+// ValidateWithReport provides detailed validation reporting using the new validator system
+func ValidateWithReport(ctx context.Context, cfg *Config, skipNetworkValidation bool) *ValidationReport {
+	validator := NewValidator().WithSkipNetwork(skipNetworkValidation)
+	return validator.ValidateConfig(ctx, cfg)
+}
+
 // validateGitHubAccess checks GitHub token permissions and repository access.
 func validateGitHubAccess(ctx context.Context, cfg *GitHubConfig, errs *ValidationErrors) {
 	if cfg.Token == "" {
