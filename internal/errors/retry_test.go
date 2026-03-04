@@ -241,7 +241,12 @@ func TestBackoffCalculation(t *testing.T) {
 	
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("attempt_%d", tc.attempt), func(t *testing.T) {
-			err := NewAPIError("test error", errors.New("test"))
+			// Use an error without RetryAfter set so exponential backoff is tested
+			err := &AgentCommunicationError{
+				Type:      ErrorTypeAPI,
+				Message:   "test error",
+				Retryable: true,
+			}
 			delay := retryer.calculateDelay(tc.attempt, err)
 			assert.Equal(t, tc.expectedDelay, delay)
 		})

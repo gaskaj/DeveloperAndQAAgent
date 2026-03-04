@@ -15,7 +15,7 @@ import (
 // RecoveryManager handles workflow recovery and cleanup operations.
 type RecoveryManager struct {
 	deps      agent.Dependencies
-	validator *state.StateValidator
+	validator state.Validator
 	logger    *slog.Logger
 }
 
@@ -70,7 +70,7 @@ const (
 )
 
 // NewRecoveryManager creates a new recovery manager.
-func NewRecoveryManager(deps agent.Dependencies, validator *state.StateValidator) *RecoveryManager {
+func NewRecoveryManager(deps agent.Dependencies, validator state.Validator) *RecoveryManager {
 	return &RecoveryManager{
 		deps:      deps,
 		validator: validator,

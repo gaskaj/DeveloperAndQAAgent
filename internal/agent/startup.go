@@ -12,7 +12,7 @@ import (
 // StartupValidator handles agent initialization validation and recovery.
 type StartupValidator struct {
 	deps      Dependencies
-	validator *state.StateValidator
+	validator state.Validator
 	logger    *slog.Logger
 }
 
@@ -52,7 +52,7 @@ const (
 )
 
 // NewStartupValidator creates a new startup validator.
-func NewStartupValidator(deps Dependencies, validator *state.StateValidator) *StartupValidator {
+func NewStartupValidator(deps Dependencies, validator state.Validator) *StartupValidator {
 	return &StartupValidator{
 		deps:      deps,
 		validator: validator,

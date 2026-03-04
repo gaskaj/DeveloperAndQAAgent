@@ -373,10 +373,10 @@ func (wp *WorkspacePersistence) generateImplementationHash(snapshot *WorkspaceSn
 
 // saveSnapshot saves a snapshot to disk with optional compression.
 func (wp *WorkspacePersistence) saveSnapshot(snapshot *WorkspaceSnapshot) error {
-	filename := fmt.Sprintf("issue-%d-%s-%s.json", 
-		snapshot.IssueNumber, 
-		snapshot.Timestamp.Format("20060102-150405"), 
-		snapshot.ID[:8])
+	filename := fmt.Sprintf("issue-%d-%s-%s.json",
+		snapshot.IssueNumber,
+		snapshot.Timestamp.Format("20060102-150405"),
+		snapshot.ID)
 	
 	filePath := filepath.Join(wp.snapshotDir, filename)
 	

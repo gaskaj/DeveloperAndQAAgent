@@ -10,11 +10,16 @@ import (
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/workspace"
 )
 
+// SnapshotRestorer defines the interface for restoring workspace snapshots.
+type SnapshotRestorer interface {
+	RestoreSnapshot(ctx context.Context, issueNumber int) (*workspace.WorkspaceSnapshot, error)
+}
+
 // ResumeManager handles intelligent resume operations for developer workflows.
 type ResumeManager struct {
-	persistence   *workspace.WorkspacePersistence
+	persistence   SnapshotRestorer
 	logger        *slog.Logger
-	recoveryMgr   *RecoveryManager
+	recoveryMgr   any
 }
 
 // ResumePoint represents an optimal point to resume work from.
@@ -68,7 +73,7 @@ const (
 )
 
 // NewResumeManager creates a new resume manager.
-func NewResumeManager(persistence *workspace.WorkspacePersistence, recoveryMgr *RecoveryManager, logger *slog.Logger) *ResumeManager {
+func NewResumeManager(persistence SnapshotRestorer, recoveryMgr any, logger *slog.Logger) *ResumeManager {
 	if logger == nil {
 		logger = slog.Default()
 	}

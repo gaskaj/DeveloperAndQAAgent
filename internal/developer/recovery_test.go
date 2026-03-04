@@ -6,11 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-github/v68/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/agent"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
+	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
 	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
 )
 
@@ -45,19 +47,69 @@ type MockGitHub struct {
 	mock.Mock
 }
 
-func (m *MockGitHub) CreateComment(ctx context.Context, issueNumber int, body string) error {
-	args := m.Called(ctx, issueNumber, body)
+func (m *MockGitHub) ListIssues(ctx context.Context, labels []string) ([]*github.Issue, error) {
+	args := m.Called(ctx, labels)
+	return args.Get(0).([]*github.Issue), args.Error(1)
+}
+func (m *MockGitHub) ListIssuesByState(ctx context.Context, labels []string, state string) ([]*github.Issue, error) {
+	args := m.Called(ctx, labels, state)
+	return args.Get(0).([]*github.Issue), args.Error(1)
+}
+func (m *MockGitHub) GetIssue(ctx context.Context, number int) (*github.Issue, error) {
+	args := m.Called(ctx, number)
+	return args.Get(0).(*github.Issue), args.Error(1)
+}
+func (m *MockGitHub) AssignIssue(ctx context.Context, number int, assignees []string) error {
+	args := m.Called(ctx, number, assignees)
 	return args.Error(0)
 }
-
-func (m *MockGitHub) AddLabels(ctx context.Context, issueNumber int, labels []string) error {
-	args := m.Called(ctx, issueNumber, labels)
+func (m *MockGitHub) AssignSelfIfNoAssignees(ctx context.Context, number int) error {
+	args := m.Called(ctx, number)
 	return args.Error(0)
 }
-
-func (m *MockGitHub) RemoveLabel(ctx context.Context, issueNumber int, label string) error {
-	args := m.Called(ctx, issueNumber, label)
+func (m *MockGitHub) AddLabels(ctx context.Context, number int, labels []string) error {
+	args := m.Called(ctx, number, labels)
 	return args.Error(0)
+}
+func (m *MockGitHub) RemoveLabel(ctx context.Context, number int, label string) error {
+	args := m.Called(ctx, number, label)
+	return args.Error(0)
+}
+func (m *MockGitHub) CreateBranch(ctx context.Context, name string, fromRef string) error {
+	args := m.Called(ctx, name, fromRef)
+	return args.Error(0)
+}
+func (m *MockGitHub) CreatePR(ctx context.Context, opts ghub.PROptions) (*github.PullRequest, error) {
+	args := m.Called(ctx, opts)
+	return args.Get(0).(*github.PullRequest), args.Error(1)
+}
+func (m *MockGitHub) ListPRs(ctx context.Context, state string) ([]*github.PullRequest, error) {
+	args := m.Called(ctx, state)
+	return args.Get(0).([]*github.PullRequest), args.Error(1)
+}
+func (m *MockGitHub) GetPR(ctx context.Context, number int) (*github.PullRequest, error) {
+	args := m.Called(ctx, number)
+	return args.Get(0).(*github.PullRequest), args.Error(1)
+}
+func (m *MockGitHub) ValidatePR(ctx context.Context, prNumber int, opts ghub.PRValidationOptions) (*ghub.PRValidationResult, error) {
+	args := m.Called(ctx, prNumber, opts)
+	return args.Get(0).(*ghub.PRValidationResult), args.Error(1)
+}
+func (m *MockGitHub) GetPRCheckStatus(ctx context.Context, prNumber int) (*ghub.PRValidationResult, error) {
+	args := m.Called(ctx, prNumber)
+	return args.Get(0).(*ghub.PRValidationResult), args.Error(1)
+}
+func (m *MockGitHub) CreateIssue(ctx context.Context, title, body string, labels []string) (*github.Issue, error) {
+	args := m.Called(ctx, title, body, labels)
+	return args.Get(0).(*github.Issue), args.Error(1)
+}
+func (m *MockGitHub) CreateComment(ctx context.Context, number int, body string) error {
+	args := m.Called(ctx, number, body)
+	return args.Error(0)
+}
+func (m *MockGitHub) ListComments(ctx context.Context, number int) ([]*github.IssueComment, error) {
+	args := m.Called(ctx, number)
+	return args.Get(0).([]*github.IssueComment), args.Error(1)
 }
 
 func TestRecoveryManager_AttemptResume(t *testing.T) {
@@ -80,11 +132,14 @@ func TestRecoveryManager_AttemptResume(t *testing.T) {
 	recoveryManager := NewRecoveryManager(deps, mockValidator)
 
 	ctx := context.Background()
+	checkpointTime := time.Now().Add(-1 * time.Hour)
 	workState := &state.AgentWorkState{
-		AgentType:   "developer",
-		IssueNumber: 123,
-		State:       state.StateImplement,
-		UpdatedAt:   time.Now().Add(-1 * time.Hour),
+		AgentType:       "developer",
+		IssueNumber:     123,
+		State:           state.StateImplement,
+		UpdatedAt:       checkpointTime,
+		CheckpointedAt:  checkpointTime,
+		CheckpointStage: "implement",
 	}
 
 	// Mock validation report showing clean state
@@ -239,8 +294,10 @@ func Test_canResumeWork(t *testing.T) {
 		{
 			name: "can resume recent work with no issues",
 			state: &state.AgentWorkState{
-				State:     state.StateImplement,
-				UpdatedAt: time.Now().Add(-1 * time.Hour),
+				State:           state.StateImplement,
+				UpdatedAt:       time.Now().Add(-1 * time.Hour),
+				CheckpointedAt:  time.Now().Add(-1 * time.Hour),
+				CheckpointStage: "implement",
 			},
 			report: &state.ValidationReport{
 				Valid:       true,

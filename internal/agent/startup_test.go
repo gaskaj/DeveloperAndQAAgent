@@ -271,8 +271,10 @@ func TestStartupValidator_PerformPeriodicValidation(t *testing.T) {
 			Agents: config.AgentsConfig{
 				Developer: config.DeveloperAgentConfig{
 					Recovery: config.RecoveryConfig{
-						Enabled:        true,
-						ReconcileDrift: false, // Don't auto-reconcile in this test
+						Enabled: true,
+						Consistency: config.ConsistencyConfig{
+							ReconcileDrift: false, // Don't auto-reconcile in this test
+						},
 					},
 				},
 			},
@@ -330,8 +332,10 @@ func TestStartupValidator_PerformPeriodicValidation_WithReconciliation(t *testin
 			Agents: config.AgentsConfig{
 				Developer: config.DeveloperAgentConfig{
 					Recovery: config.RecoveryConfig{
-						Enabled:        true,
-						ReconcileDrift: true, // Auto-reconcile enabled
+						Enabled: true,
+						Consistency: config.ConsistencyConfig{
+							ReconcileDrift: true, // Auto-reconcile enabled
+						},
 					},
 				},
 			},

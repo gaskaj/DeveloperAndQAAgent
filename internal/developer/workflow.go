@@ -122,6 +122,10 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 	}
 	
 	// Create managed workspace
+	if d.workspaceManager == nil {
+		d.failIssue(ctx, ws, fmt.Errorf("workspace manager not initialized"))
+		return fmt.Errorf("workspace manager not initialized")
+	}
 	managedWorkspace, err := d.workspaceManager.CreateWorkspace(ctx, issueNum)
 	if err != nil {
 		d.failIssue(ctx, ws, fmt.Errorf("creating managed workspace: %w", err))

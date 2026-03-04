@@ -132,6 +132,14 @@ const (
 	PriorityLow    ActionPriority = "low"
 )
 
+// Validator defines the interface for state validation operations.
+// This interface allows test mocking of the StateValidator.
+type Validator interface {
+	ValidateWorkState(ctx context.Context, workState *AgentWorkState) (*ValidationReport, error)
+	DetectOrphanedWork(ctx context.Context) ([]*OrphanedWorkItem, error)
+	ReconcileState(ctx context.Context, workState *AgentWorkState) error
+}
+
 // NewStateValidator creates a new state validator.
 func NewStateValidator(store Store, github ghub.Client, logger *slog.Logger) *StateValidator {
 	return &StateValidator{

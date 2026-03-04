@@ -141,7 +141,7 @@ func New(deps agent.Dependencies) (agent.Agent, error) {
 }
 
 // NewStartupValidator creates a startup validator - wrapper function.
-func NewStartupValidator(deps agent.Dependencies, validator *state.StateValidator) *StartupValidator {
+func NewStartupValidator(deps agent.Dependencies, validator state.Validator) *StartupValidator {
 	return &StartupValidator{
 		deps:      deps,
 		validator: validator,
@@ -152,7 +152,7 @@ func NewStartupValidator(deps agent.Dependencies, validator *state.StateValidato
 // StartupValidator handles agent initialization validation and recovery.
 type StartupValidator struct {
 	deps      agent.Dependencies
-	validator *state.StateValidator
+	validator state.Validator
 	logger    *slog.Logger
 }
 
