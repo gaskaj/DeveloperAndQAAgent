@@ -191,8 +191,8 @@ func validateNumericRanges(cfg *Config, errs *ValidationErrors) {
 	if cfg.Decomposition.MaxSubtasks > 20 {
 		errs.Add("decomposition.max_subtasks", cfg.Decomposition.MaxSubtasks, "range", "should not exceed 20 to prevent excessive complexity")
 	}
-	if cfg.Decomposition.MaxIterationBudget > 100 {
-		errs.Add("decomposition.max_iteration_budget", cfg.Decomposition.MaxIterationBudget, "range", "should not exceed 100 to prevent runaway processes")
+	if cfg.Decomposition.MaxIterationBudget > 250 {
+		errs.Add("decomposition.max_iteration_budget", cfg.Decomposition.MaxIterationBudget, "range", "should not exceed 250 to prevent runaway processes")
 	}
 }
 
