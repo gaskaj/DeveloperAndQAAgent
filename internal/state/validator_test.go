@@ -108,6 +108,11 @@ func (m *MockGitHubClient) GetPRCheckStatus(ctx context.Context, prNumber int) (
 	return args.Get(0).(*ghub.PRValidationResult), args.Error(1)
 }
 
+func (m *MockGitHubClient) MergePR(ctx context.Context, prNumber int, commitMessage string) error {
+	args := m.Called(ctx, prNumber, commitMessage)
+	return args.Error(0)
+}
+
 func (m *MockGitHubClient) CreateIssue(ctx context.Context, title, body string, labels []string) (*github.Issue, error) {
 	args := m.Called(ctx, title, body, labels)
 	if args.Get(0) == nil {

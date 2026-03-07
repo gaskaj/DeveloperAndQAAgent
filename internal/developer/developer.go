@@ -113,6 +113,14 @@ func New(deps agent.Dependencies) (agent.Agent, error) {
 		deps.Logger,
 	)
 
+	// Build the idle handler chain: auto-issue-processing first, then creativity.
+	var idleHandlers []func(ctx context.Context) error
+
+	// Auto-issue processing: promote a suggestion to agent:ready when idle.
+	if deps.Config.Agents.Developer.AllowAutoIssueProcessing {
+		idleHandlers = append(idleHandlers, da.promoteOneSuggestion)
+	}
+
 	// Wire up creativity engine as idle handler when enabled.
 	if deps.Config.Creativity.Enabled {
 		ghAdapter := creativity.NewGitHubAdapter(deps.GitHub)
@@ -132,7 +140,7 @@ func New(deps agent.Dependencies) (agent.Agent, error) {
 			memStore,
 		)
 
-		da.poller.IdleHandler = func(ctx context.Context) error {
+		idleHandlers = append(idleHandlers, func(ctx context.Context) error {
 			da.updateStatus(state.StateCreativeThink, 0, "generating improvement suggestions")
 			defer da.updateStatus(state.StateIdle, 0, "waiting for issues")
 			da.reportEvent(ctx, apitypes.AgentEvent{
@@ -143,6 +151,17 @@ func New(deps agent.Dependencies) (agent.Agent, error) {
 				Timestamp:     time.Now(),
 			})
 			return engine.Run(ctx)
+		})
+	}
+
+	if len(idleHandlers) > 0 {
+		da.poller.IdleHandler = func(ctx context.Context) error {
+			for _, handler := range idleHandlers {
+				if err := handler(ctx); err != nil {
+					return err
+				}
+			}
+			return nil
 		}
 	}
 
@@ -403,6 +422,63 @@ func (d *DeveloperAgent) updateStatus(s state.WorkflowState, issueID int, msg st
 
 func (d *DeveloperAgent) logger() *slog.Logger {
 	return d.Deps.Logger.With("agent", "developer")
+}
+
+// promoteOneSuggestion finds one issue with only the agent:suggestion label
+// (no agent:failed, no agent:suggestion-rejected) and adds agent:ready to it.
+// This allows the agent to autonomously process its own suggestions when idle.
+func (d *DeveloperAgent) promoteOneSuggestion(ctx context.Context) error {
+	// First check if any agents are currently working (not idle)
+	states, err := d.Deps.Store.List(ctx)
+	if err != nil {
+		d.logger().Debug("failed to list agent states for auto-processing check", "error", err)
+		return nil // Don't fail, just skip
+	}
+	for _, ws := range states {
+		if ws.State != state.StateIdle && ws.State != state.StateComplete && ws.State != state.StateFailed {
+			d.logger().Debug("agents are busy, skipping auto-issue promotion", "busy_agent", ws.AgentType, "state", ws.State)
+			return nil
+		}
+	}
+
+	// List issues with agent:suggestion label
+	suggestions, err := d.Deps.GitHub.ListIssues(ctx, []string{"agent:suggestion"})
+	if err != nil {
+		d.logger().Debug("failed to list suggestion issues", "error", err)
+		return nil
+	}
+
+	for _, issue := range suggestions {
+		// Check labels: must have ONLY agent:suggestion (no agent:failed, no agent:suggestion-rejected, no agent:ready, no agent:claimed)
+		labels := make(map[string]bool)
+		for _, l := range issue.Labels {
+			labels[l.GetName()] = true
+		}
+
+		// Skip if it has any disqualifying labels
+		if labels["agent:failed"] || labels["agent:suggestion-rejected"] ||
+			labels["agent:ready"] || labels["agent:claimed"] ||
+			labels["agent:in-progress"] || labels["agent:in-review"] {
+			continue
+		}
+
+		// Found a clean suggestion — promote it
+		issueNum := issue.GetNumber()
+		d.logger().Info("auto-promoting suggestion to ready", "issue", issueNum, "title", issue.GetTitle())
+
+		if err := d.Deps.GitHub.AddLabels(ctx, issueNum, []string{"agent:ready"}); err != nil {
+			d.logger().Error("failed to add agent:ready label", "issue", issueNum, "error", err)
+			return nil
+		}
+
+		_ = d.Deps.GitHub.CreateComment(ctx, issueNum,
+			"🤖 Auto-promoting this suggestion for implementation (auto_issue_processing enabled).")
+
+		// Only promote one at a time
+		return nil
+	}
+
+	return nil
 }
 
 // reportEvent sends an event to the control plane if the reporter is configured.

@@ -69,11 +69,13 @@ type AgentsConfig struct {
 
 // DeveloperAgentConfig holds developer agent settings.
 type DeveloperAgentConfig struct {
-	Enabled       bool                     `mapstructure:"enabled"`
-	MaxConcurrent int                      `mapstructure:"max_concurrent"`
-	WorkspaceDir  string                   `mapstructure:"workspace_dir"`
-	Recovery      RecoveryConfig           `mapstructure:"recovery"`
-	Workspace     DeveloperWorkspaceConfig `mapstructure:"workspace"`
+	Enabled                  bool                     `mapstructure:"enabled"`
+	MaxConcurrent            int                      `mapstructure:"max_concurrent"`
+	WorkspaceDir             string                   `mapstructure:"workspace_dir"`
+	AllowPRMerging           bool                     `mapstructure:"allow_pr_merging"`
+	AllowAutoIssueProcessing bool                     `mapstructure:"allow_auto_issue_processing"`
+	Recovery                 RecoveryConfig           `mapstructure:"recovery"`
+	Workspace                DeveloperWorkspaceConfig `mapstructure:"workspace"`
 }
 
 // DeveloperWorkspaceConfig holds workspace-specific configuration for the developer agent.

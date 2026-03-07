@@ -555,6 +555,16 @@ func (m *MockGitHubClient) GetPRCheckStatus(ctx context.Context, prNumber int) (
 	}, nil
 }
 
+func (m *MockGitHubClient) MergePR(ctx context.Context, prNumber int, commitMessage string) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.simulatedError != nil {
+		return m.simulatedError
+	}
+	return nil
+}
+
 // SimpleClaudeClient is a minimal mock that focuses on testing agent behavior.
 // It is still available for test-level configuration (e.g. setting responses),
 // but the actual HTTP mock is provided by MockClaudeServer.

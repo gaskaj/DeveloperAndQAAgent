@@ -459,6 +459,21 @@ func (d *DeveloperAgent) processIssue(ctx context.Context, issue *github.Issue) 
 		return validationErr
 	}
 
+	// Step 7.5: Auto-merge PR if enabled and all checks passed
+	if d.Deps.Config.Agents.Developer.AllowPRMerging {
+		d.logger().Info("auto-merging PR", "pr", pr.GetNumber(), "issue", issueNum)
+		mergeMsg := fmt.Sprintf("feat: implement #%d - %s (#%d)", issueNum, issueTitle, pr.GetNumber())
+		if err := d.Deps.GitHub.MergePR(ctx, pr.GetNumber(), mergeMsg); err != nil {
+			d.logger().Error("failed to auto-merge PR", "pr", pr.GetNumber(), "error", err)
+			_ = d.Deps.GitHub.CreateComment(ctx, issueNum,
+				fmt.Sprintf("⚠️ Auto-merge failed: %v. PR is ready for manual merge.", err))
+		} else {
+			d.logger().Info("PR auto-merged successfully", "pr", pr.GetNumber())
+			_ = d.Deps.GitHub.CreateComment(ctx, issueNum,
+				fmt.Sprintf("✅ PR #%d has been squash-merged automatically.", pr.GetNumber()))
+		}
+	}
+
 	// Step 8: Update labels and complete
 	d.updateStatus(state.StateReview, issueNum, "awaiting review")
 	_ = d.Deps.GitHub.RemoveLabel(ctx, issueNum, "agent:in-progress")

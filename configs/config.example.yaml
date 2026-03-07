@@ -71,6 +71,16 @@ agents:
     # Each issue gets its own workspace subdirectory
     # Example: "./workspaces/issue-123/"
     workspace_dir: "./workspaces"
+
+    # When true, the agent will squash-merge PRs after all checks pass.
+    # When false (default), PRs are left for human review and manual merge.
+    allow_pr_merging: false
+
+    # When true, the agent will automatically promote one agent:suggestion
+    # issue to agent:ready when idle (no active work across any agents).
+    # Only promotes suggestions that have NOT been previously failed or rejected.
+    # Promotes at most one suggestion at a time.
+    allow_auto_issue_processing: false
     
     # Workspace persistence configuration
     workspace:
@@ -192,7 +202,7 @@ creativity:
   # Prevents overwhelming the issue tracker
   # Must be > 0 when creativity is enabled
   # Recommended: 1-5
-  max_pending_suggestions: 20
+  max_pending_suggestions: 5
   
   # Maximum rejected suggestion titles to remember (avoids duplicates)
   # Higher values = better duplicate detection, more memory usage

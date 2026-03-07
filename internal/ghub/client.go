@@ -27,6 +27,7 @@ type Client interface {
 	GetPR(ctx context.Context, number int) (*github.PullRequest, error)
 	ValidatePR(ctx context.Context, prNumber int, opts PRValidationOptions) (*PRValidationResult, error)
 	GetPRCheckStatus(ctx context.Context, prNumber int) (*PRValidationResult, error)
+	MergePR(ctx context.Context, prNumber int, commitMessage string) error
 
 	// Issues (create)
 	CreateIssue(ctx context.Context, title, body string, labels []string) (*github.Issue, error)

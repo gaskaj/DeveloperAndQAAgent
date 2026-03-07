@@ -656,6 +656,10 @@ func (m *trackingMockGitHub) GetPRCheckStatus(_ context.Context, _ int) (*ghub.P
 	}, nil
 }
 
+func (m *trackingMockGitHub) MergePR(_ context.Context, _ int, _ string) error {
+	return nil
+}
+
 // --- Integration helpers ---
 
 func newTestAgent(t *testing.T, gh ghub.Client, decompEnabled bool) *DeveloperAgent {

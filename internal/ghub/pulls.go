@@ -43,3 +43,14 @@ func (c *GitHubClient) GetPR(ctx context.Context, number int) (*github.PullReque
 	}
 	return pr, nil
 }
+
+// MergePR squash-merges a pull request.
+func (c *GitHubClient) MergePR(ctx context.Context, prNumber int, commitMessage string) error {
+	_, _, err := c.client.PullRequests.Merge(ctx, c.owner, c.repo, prNumber, commitMessage, &github.PullRequestOptions{
+		MergeMethod: "squash",
+	})
+	if err != nil {
+		return fmt.Errorf("merging pull request %d: %w", prNumber, err)
+	}
+	return nil
+}

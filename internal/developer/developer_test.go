@@ -68,6 +68,9 @@ func (m *mockGitHubClient) GetPRCheckStatus(_ context.Context, _ int) (*ghub.PRV
 		AllChecksPassing: true,
 	}, nil
 }
+func (m *mockGitHubClient) MergePR(_ context.Context, _ int, _ string) error {
+	return nil
+}
 
 func newTestDeps(t *testing.T) agent.Dependencies {
 	t.Helper()

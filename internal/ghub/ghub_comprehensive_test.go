@@ -615,6 +615,9 @@ func (m *mockClient) ValidatePR(ctx context.Context, prNumber int, opts PRValida
 func (m *mockClient) GetPRCheckStatus(ctx context.Context, prNumber int) (*PRValidationResult, error) {
 	return nil, nil
 }
+func (m *mockClient) MergePR(ctx context.Context, prNumber int, commitMessage string) error {
+	return nil
+}
 func (m *mockClient) CreateIssue(ctx context.Context, title, body string, labels []string) (*github.Issue, error) {
 	return nil, nil
 }
