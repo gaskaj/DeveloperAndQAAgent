@@ -5,10 +5,10 @@ import (
 	"log/slog"
 	"path/filepath"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/agent"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/workspace"
+	"github.com/gaskaj/OpenAgentFramework/internal/agent"
+	"github.com/gaskaj/OpenAgentFramework/internal/config"
+	"github.com/gaskaj/OpenAgentFramework/internal/observability"
+	"github.com/gaskaj/OpenAgentFramework/internal/workspace"
 	"golang.org/x/sync/errgroup"
 )
 

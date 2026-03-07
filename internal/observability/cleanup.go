@@ -13,7 +13,7 @@ import (
 
 	"compress/gzip"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
+	"github.com/gaskaj/OpenAgentFramework/internal/config"
 )
 
 // LogCleanupManager manages log cleanup based on retention policies and disk space

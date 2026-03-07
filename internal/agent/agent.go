@@ -4,12 +4,12 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/claude"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/errors"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
+	"github.com/gaskaj/OpenAgentFramework/internal/claude"
+	"github.com/gaskaj/OpenAgentFramework/internal/config"
+	"github.com/gaskaj/OpenAgentFramework/internal/errors"
+	"github.com/gaskaj/OpenAgentFramework/internal/ghub"
+	"github.com/gaskaj/OpenAgentFramework/internal/observability"
+	"github.com/gaskaj/OpenAgentFramework/internal/state"
 )
 
 // AgentType identifies the kind of agent.

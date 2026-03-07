@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
+	"github.com/gaskaj/OpenAgentFramework/internal/observability"
 )
 
 // CircuitBreakerState represents the current state of a circuit breaker

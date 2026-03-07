@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
+	"github.com/gaskaj/OpenAgentFramework/internal/config"
+	"github.com/gaskaj/OpenAgentFramework/internal/state"
 )
 
 // FileState represents the state of a single file in the workspace.

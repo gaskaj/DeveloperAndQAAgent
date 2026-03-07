@@ -3,7 +3,7 @@ package orchestrator
 import (
 	"log/slog"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/agent"
+	"github.com/gaskaj/OpenAgentFramework/internal/agent"
 )
 
 // HealthChecker monitors agent health.

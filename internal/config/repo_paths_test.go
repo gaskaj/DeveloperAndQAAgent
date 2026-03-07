@@ -15,17 +15,17 @@ func TestConfig_GetRepoPath(t *testing.T) {
 			config: Config{
 				GitHub: GitHubConfig{
 					Owner: "gaskaj",
-					Repo:  "DeveloperAndQAAgent",
+					Repo:  "OpenAgentFramework",
 				},
 			},
-			expected: "gaskaj/DeveloperAndQAAgent",
+			expected: "gaskaj/OpenAgentFramework",
 		},
 		{
 			name: "empty owner",
 			config: Config{
 				GitHub: GitHubConfig{
 					Owner: "",
-					Repo:  "DeveloperAndQAAgent",
+					Repo:  "OpenAgentFramework",
 				},
 			},
 			expected: "",
@@ -74,18 +74,18 @@ func TestConfig_GetLogPath(t *testing.T) {
 			config: Config{
 				GitHub: GitHubConfig{
 					Owner: "gaskaj",
-					Repo:  "DeveloperAndQAAgent",
+					Repo:  "OpenAgentFramework",
 				},
 			},
 			baseLogDir: "./logs",
-			expected:   "logs/gaskaj/DeveloperAndQAAgent",
+			expected:   "logs/gaskaj/OpenAgentFramework",
 		},
 		{
 			name: "without repo path",
 			config: Config{
 				GitHub: GitHubConfig{
 					Owner: "",
-					Repo:  "DeveloperAndQAAgent",
+					Repo:  "OpenAgentFramework",
 				},
 			},
 			baseLogDir: "./logs",
@@ -115,11 +115,11 @@ func TestConfig_GetWorkspacePath(t *testing.T) {
 			config: Config{
 				GitHub: GitHubConfig{
 					Owner: "gaskaj",
-					Repo:  "DeveloperAndQAAgent",
+					Repo:  "OpenAgentFramework",
 				},
 			},
 			baseWorkspaceDir: "./workspaces",
-			expected:         "workspaces/gaskaj/DeveloperAndQAAgent",
+			expected:         "workspaces/gaskaj/OpenAgentFramework",
 		},
 		{
 			name: "without repo path",

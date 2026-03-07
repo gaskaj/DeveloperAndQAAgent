@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/workspace"
+	"github.com/gaskaj/OpenAgentFramework/internal/config"
+	"github.com/gaskaj/OpenAgentFramework/internal/observability"
+	"github.com/gaskaj/OpenAgentFramework/internal/workspace"
 )
 
 // DemonstrateRepoSpecificPaths shows how the new repo-specific path functionality works
@@ -26,11 +26,11 @@ func DemonstrateRepoSpecificPaths() error {
 	baseLogDir := filepath.Join(demoDir, "logs")
 	baseWorkspaceDir := filepath.Join(demoDir, "workspaces")
 
-	// Configuration for Agent 1 working on gaskaj/DeveloperAndQAAgent
+	// Configuration for Agent 1 working on gaskaj/OpenAgentFramework
 	config1 := &config.Config{
 		GitHub: config.GitHubConfig{
 			Owner: "gaskaj",
-			Repo:  "DeveloperAndQAAgent",
+			Repo:  "OpenAgentFramework",
 		},
 		Logging: config.LoggingConfig{
 			Level:    "info",
@@ -91,7 +91,7 @@ func DemonstrateRepoSpecificPaths() error {
 	logger3 := observability.NewStructuredLoggerWithConfig(config3.Logging, config3)
 
 	// Log messages from each agent
-	logger1.Info("Agent 1 started working on gaskaj/DeveloperAndQAAgent issue #164")
+	logger1.Info("Agent 1 started working on gaskaj/OpenAgentFramework issue #164")
 	logger2.Info("Agent 2 started working on microsoft/vscode issue #4567")
 	logger3.Info("Agent 3 started working on golang/go issue #8901")
 
@@ -138,7 +138,7 @@ func DemonstrateRepoSpecificPaths() error {
 	if err != nil {
 		return fmt.Errorf("failed to create workspace 1: %w", err)
 	}
-	fmt.Printf("Created workspace for gaskaj/DeveloperAndQAAgent#164: %s\n", ws1.Path)
+	fmt.Printf("Created workspace for gaskaj/OpenAgentFramework#164: %s\n", ws1.Path)
 
 	ws2, err := manager2.CreateWorkspace(nil, 4567)
 	if err != nil {
@@ -158,7 +158,7 @@ func DemonstrateRepoSpecificPaths() error {
 
 	// Demonstrate isolation - cleanup only affects the specific repo
 	fmt.Println("\n=== Demonstrating Isolation ===")
-	fmt.Println("Cleaning up workspace for gaskaj/DeveloperAndQAAgent#164...")
+	fmt.Println("Cleaning up workspace for gaskaj/OpenAgentFramework#164...")
 
 	err = manager1.CleanupWorkspace(nil, 164)
 	if err != nil {

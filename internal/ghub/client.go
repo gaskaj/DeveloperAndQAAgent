@@ -3,7 +3,7 @@ package ghub
 import (
 	"context"
 
-	agentErrors "github.com/gaskaj/DeveloperAndQAAgent/internal/errors"
+	agentErrors "github.com/gaskaj/OpenAgentFramework/internal/errors"
 	"github.com/google/go-github/v68/github"
 )
 

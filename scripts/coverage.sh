@@ -21,18 +21,18 @@ COVERAGE_DIR="coverage-reports"
 
 # Package-specific minimum coverage thresholds
 declare -A PACKAGE_THRESHOLDS=(
-    ["github.com/gaskaj/DeveloperAndQAAgent/internal/claude"]=85
-    ["github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"]=85
-    ["github.com/gaskaj/DeveloperAndQAAgent/internal/developer"]=85
-    ["github.com/gaskaj/DeveloperAndQAAgent/internal/config"]=80
-    ["github.com/gaskaj/DeveloperAndQAAgent/internal/state"]=80
-    ["github.com/gaskaj/DeveloperAndQAAgent/internal/workspace"]=80
-    ["github.com/gaskaj/DeveloperAndQAAgent/internal/errors"]=75
-    ["github.com/gaskaj/DeveloperAndQAAgent/internal/observability"]=75
-    ["github.com/gaskaj/DeveloperAndQAAgent/internal/agent"]=80
-    ["github.com/gaskaj/DeveloperAndQAAgent/internal/orchestrator"]=80
-    ["github.com/gaskaj/DeveloperAndQAAgent/internal/creativity"]=75
-    ["github.com/gaskaj/DeveloperAndQAAgent/internal/gitops"]=75
+    ["github.com/gaskaj/OpenAgentFramework/internal/claude"]=85
+    ["github.com/gaskaj/OpenAgentFramework/internal/ghub"]=85
+    ["github.com/gaskaj/OpenAgentFramework/internal/developer"]=85
+    ["github.com/gaskaj/OpenAgentFramework/internal/config"]=80
+    ["github.com/gaskaj/OpenAgentFramework/internal/state"]=80
+    ["github.com/gaskaj/OpenAgentFramework/internal/workspace"]=80
+    ["github.com/gaskaj/OpenAgentFramework/internal/errors"]=75
+    ["github.com/gaskaj/OpenAgentFramework/internal/observability"]=75
+    ["github.com/gaskaj/OpenAgentFramework/internal/agent"]=80
+    ["github.com/gaskaj/OpenAgentFramework/internal/orchestrator"]=80
+    ["github.com/gaskaj/OpenAgentFramework/internal/creativity"]=75
+    ["github.com/gaskaj/OpenAgentFramework/internal/gitops"]=75
 )
 
 # Function to print colored output

@@ -32,9 +32,9 @@ func TestLoadCoverageProfile(t *testing.T) {
 		tmpDir := t.TempDir()
 		profilePath := filepath.Join(tmpDir, "coverage.out")
 		content := `mode: set
-github.com/gaskaj/DeveloperAndQAAgent/internal/config/config.go:10.30,12.2 1 1
-github.com/gaskaj/DeveloperAndQAAgent/internal/config/config.go:14.30,16.2 1 0
-github.com/gaskaj/DeveloperAndQAAgent/internal/errors/retry.go:20.40,25.2 3 1
+github.com/gaskaj/OpenAgentFramework/internal/config/config.go:10.30,12.2 1 1
+github.com/gaskaj/OpenAgentFramework/internal/config/config.go:14.30,16.2 1 0
+github.com/gaskaj/OpenAgentFramework/internal/errors/retry.go:20.40,25.2 3 1
 `
 		require.NoError(t, os.WriteFile(profilePath, []byte(content), 0o644))
 
@@ -159,9 +159,9 @@ func TestExtractPackageName(t *testing.T) {
 		filePath string
 		expected string
 	}{
-		{"github.com/gaskaj/DeveloperAndQAAgent/internal/config/config.go", "config"},
-		{"github.com/gaskaj/DeveloperAndQAAgent/internal/errors/retry.go", "errors"},
-		{"github.com/gaskaj/DeveloperAndQAAgent/internal/developer/workflow.go", "developer"},
+		{"github.com/gaskaj/OpenAgentFramework/internal/config/config.go", "config"},
+		{"github.com/gaskaj/OpenAgentFramework/internal/errors/retry.go", "errors"},
+		{"github.com/gaskaj/OpenAgentFramework/internal/developer/workflow.go", "developer"},
 		{"some/other/path/file.go", "path"},
 	}
 
@@ -340,9 +340,9 @@ func TestGenerateReport(t *testing.T) {
 func TestCalculatePackageStats(t *testing.T) {
 	ca := NewCoverageAnalyzer()
 	ca.profiles = []CoverageProfile{
-		{FileName: "github.com/gaskaj/DeveloperAndQAAgent/internal/config/config.go", StartLine: 10, EndLine: 12, NumStmt: 3, Count: 1},
-		{FileName: "github.com/gaskaj/DeveloperAndQAAgent/internal/config/validate.go", StartLine: 5, EndLine: 7, NumStmt: 2, Count: 0},
-		{FileName: "github.com/gaskaj/DeveloperAndQAAgent/internal/errors/retry.go", StartLine: 10, EndLine: 15, NumStmt: 5, Count: 3},
+		{FileName: "github.com/gaskaj/OpenAgentFramework/internal/config/config.go", StartLine: 10, EndLine: 12, NumStmt: 3, Count: 1},
+		{FileName: "github.com/gaskaj/OpenAgentFramework/internal/config/validate.go", StartLine: 5, EndLine: 7, NumStmt: 2, Count: 0},
+		{FileName: "github.com/gaskaj/OpenAgentFramework/internal/errors/retry.go", StartLine: 10, EndLine: 15, NumStmt: 5, Count: 3},
 	}
 
 	err := ca.calculatePackageStats()
@@ -364,11 +364,11 @@ func TestEndToEnd(t *testing.T) {
 	profilePath := filepath.Join(tmpDir, "coverage.out")
 
 	content := `mode: set
-github.com/gaskaj/DeveloperAndQAAgent/internal/config/config.go:10.30,12.2 3 1
-github.com/gaskaj/DeveloperAndQAAgent/internal/config/config.go:14.30,18.2 5 0
-github.com/gaskaj/DeveloperAndQAAgent/internal/config/validate.go:5.20,8.2 2 1
-github.com/gaskaj/DeveloperAndQAAgent/internal/errors/retry.go:10.30,15.2 5 1
-github.com/gaskaj/DeveloperAndQAAgent/internal/errors/retry.go:20.30,25.2 3 0
+github.com/gaskaj/OpenAgentFramework/internal/config/config.go:10.30,12.2 3 1
+github.com/gaskaj/OpenAgentFramework/internal/config/config.go:14.30,18.2 5 0
+github.com/gaskaj/OpenAgentFramework/internal/config/validate.go:5.20,8.2 2 1
+github.com/gaskaj/OpenAgentFramework/internal/errors/retry.go:10.30,15.2 5 1
+github.com/gaskaj/OpenAgentFramework/internal/errors/retry.go:20.30,25.2 3 0
 `
 	require.NoError(t, os.WriteFile(profilePath, []byte(content), 0o644))
 

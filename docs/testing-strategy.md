@@ -1,6 +1,6 @@
 # Testing Strategy
 
-This document outlines the comprehensive testing strategy for the DeveloperAndQAAgent project, including unit tests, integration tests, coverage requirements, and quality assurance practices.
+This document outlines the comprehensive testing strategy for the OpenAgentFramework project, including unit tests, integration tests, coverage requirements, and quality assurance practices.
 
 ## Testing Philosophy
 
@@ -510,4 +510,4 @@ Track these metrics over time:
 - **Badges**: Visual coverage status
 - **Alerts**: Quality gate failures
 
-This comprehensive testing strategy ensures high code quality, prevents regressions, and supports confident deployment of changes to the DeveloperAndQAAgent system.
+This comprehensive testing strategy ensures high code quality, prevents regressions, and supports confident deployment of changes to the OpenAgentFramework system.

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
+	"github.com/gaskaj/OpenAgentFramework/internal/ghub"
 	"github.com/google/go-github/v68/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"

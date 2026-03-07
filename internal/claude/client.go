@@ -7,8 +7,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
-	agentErrors "github.com/gaskaj/DeveloperAndQAAgent/internal/errors"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
+	agentErrors "github.com/gaskaj/OpenAgentFramework/internal/errors"
+	"github.com/gaskaj/OpenAgentFramework/internal/observability"
 )
 
 // Client wraps the Anthropic SDK for Claude API interactions.

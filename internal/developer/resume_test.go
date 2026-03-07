@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/workspace"
+	"github.com/gaskaj/OpenAgentFramework/internal/state"
+	"github.com/gaskaj/OpenAgentFramework/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"

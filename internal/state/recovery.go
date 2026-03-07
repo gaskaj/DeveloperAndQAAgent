@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
+	"github.com/gaskaj/OpenAgentFramework/internal/config"
+	"github.com/gaskaj/OpenAgentFramework/internal/ghub"
+	"github.com/gaskaj/OpenAgentFramework/internal/observability"
 )
 
 // RecoveryManager handles startup recovery from interrupted workflows

@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
+	"github.com/gaskaj/OpenAgentFramework/internal/state"
 )
 
 // StartupValidator handles agent initialization validation and recovery.

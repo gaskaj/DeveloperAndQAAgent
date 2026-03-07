@@ -8,7 +8,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
+	"github.com/gaskaj/OpenAgentFramework/internal/observability"
 )
 
 // RetryPolicy defines how retries should be performed

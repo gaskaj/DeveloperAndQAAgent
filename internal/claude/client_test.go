@@ -14,10 +14,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
-	agentErrors "github.com/gaskaj/DeveloperAndQAAgent/internal/errors"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
 	"log/slog"
+
+	"github.com/gaskaj/OpenAgentFramework/internal/config"
+	agentErrors "github.com/gaskaj/OpenAgentFramework/internal/errors"
+	"github.com/gaskaj/OpenAgentFramework/internal/observability"
 )
 
 // newTestServer creates an httptest server that returns a valid Claude API response.

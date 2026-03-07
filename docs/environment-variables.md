@@ -1,6 +1,6 @@
 # Environment Variables Reference
 
-This document provides a complete reference for all environment variables used by DeveloperAndQAAgent.
+This document provides a complete reference for all environment variables used by OpenAgentFramework.
 
 ## Overview
 

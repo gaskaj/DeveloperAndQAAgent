@@ -1,4 +1,4 @@
-# DeveloperAndQAAgent
+# OpenAgentFramework
 
 ![Coverage](https://img.shields.io/badge/coverage-49.0%25-red)
 
@@ -7,7 +7,7 @@ An autonomous development agent framework that uses **GitHub as its source of tr
 
 ## Overview
 
-DeveloperAndQAAgent provides agent personas — Developer, QA, and Development Manager — that monitor GitHub issues, write code, create pull requests, run tests, and coordinate via GitHub labels and comments.
+OpenAgentFramework provides agent personas — Developer, QA, and Development Manager — that monitor GitHub issues, write code, create pull requests, run tests, and coordinate via GitHub labels and comments.
 
 ## Documentation
 

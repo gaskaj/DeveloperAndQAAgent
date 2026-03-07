@@ -1,6 +1,6 @@
-# Contributing to DeveloperAndQAAgent
+# Contributing to OpenAgentFramework
 
-Thank you for your interest in contributing to the DeveloperAndQAAgent project! This guide outlines the requirements and processes for contributing code, documentation, and other improvements.
+Thank you for your interest in contributing to the OpenAgentFramework project! This guide outlines the requirements and processes for contributing code, documentation, and other improvements.
 
 ## Table of Contents
 
@@ -27,8 +27,8 @@ Thank you for your interest in contributing to the DeveloperAndQAAgent project! 
 
 1. **Fork and clone the repository**:
    ```bash
-   git clone https://github.com/your-username/DeveloperAndQAAgent.git
-   cd DeveloperAndQAAgent
+   git clone https://github.com/your-username/OpenAgentFramework.git
+   cd OpenAgentFramework
    ```
 
 2. **Install dependencies**:
@@ -314,7 +314,7 @@ import (
     "context"
     "fmt"
     
-    "github.com/gaskaj/DeveloperAndQAAgent/internal/state"
+    "github.com/gaskaj/OpenAgentFramework/internal/state"
 )
 
 // Service represents a business service.
@@ -505,4 +505,4 @@ Contributors are recognized in:
 - Release notes
 - Project documentation
 
-Thank you for contributing to making the DeveloperAndQAAgent project better!
+Thank you for contributing to making the OpenAgentFramework project better!

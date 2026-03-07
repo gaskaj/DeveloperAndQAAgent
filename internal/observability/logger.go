@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
+	"github.com/gaskaj/OpenAgentFramework/internal/config"
 )
 
 // LogLevel represents structured log levels

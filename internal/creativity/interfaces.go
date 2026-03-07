@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/claude"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
+	"github.com/gaskaj/OpenAgentFramework/internal/claude"
+	"github.com/gaskaj/OpenAgentFramework/internal/ghub"
 	"github.com/google/go-github/v68/github"
 )
 

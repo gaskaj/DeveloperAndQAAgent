@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
+	"github.com/gaskaj/OpenAgentFramework/internal/config"
 )
 
 func TestLogRotationManager_Basic(t *testing.T) {

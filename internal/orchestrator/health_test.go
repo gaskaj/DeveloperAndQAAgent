@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/agent"
+	"github.com/gaskaj/OpenAgentFramework/internal/agent"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

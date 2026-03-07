@@ -1,4 +1,4 @@
-# DeveloperAndQAAgent Configuration
+# OpenAgentFramework Configuration
 #
 # Environment variables can be used with ${VAR_NAME} syntax.
 # All ${VAR_NAME} references are expanded from environment variables at runtime.
@@ -17,7 +17,7 @@ github:
   
   # Repository name
   # Example: "my-project"
-  repo: "DeveloperAndQAAgent"
+  repo: "OpenAgentFramework"
   
   # Polling interval for checking new GitHub events
   # Supported formats: "30s", "1m", "5m"

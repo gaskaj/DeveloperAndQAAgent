@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/workspace"
+	"github.com/gaskaj/OpenAgentFramework/internal/state"
+	"github.com/gaskaj/OpenAgentFramework/internal/workspace"
 )
 
 // SnapshotRestorer defines the interface for restoring workspace snapshots.

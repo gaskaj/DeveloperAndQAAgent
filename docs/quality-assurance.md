@@ -1,6 +1,6 @@
 # Quality Assurance Framework
 
-This document describes the comprehensive quality assurance framework for the DeveloperAndQAAgent project, including automated quality gates, code standards, and continuous quality monitoring.
+This document describes the comprehensive quality assurance framework for the OpenAgentFramework project, including automated quality gates, code standards, and continuous quality monitoring.
 
 ## Overview
 
@@ -136,7 +136,7 @@ import (
     "github.com/spf13/cobra"
     
     // Internal packages
-    "github.com/gaskaj/DeveloperAndQAAgent/internal/agent"
+    "github.com/gaskaj/OpenAgentFramework/internal/agent"
 )
 
 // Constants
@@ -561,6 +561,6 @@ go test -v ./...   # Verbose test output
 
 ## Conclusion
 
-The Quality Assurance framework provides comprehensive, automated quality control while maintaining developer productivity and code reliability. Through continuous monitoring, improvement, and adaptation, it ensures the DeveloperAndQAAgent project maintains high standards of quality, reliability, and maintainability.
+The Quality Assurance framework provides comprehensive, automated quality control while maintaining developer productivity and code reliability. Through continuous monitoring, improvement, and adaptation, it ensures the OpenAgentFramework project maintains high standards of quality, reliability, and maintainability.
 
 Regular reviews and updates to this framework ensure it evolves with the project's needs and incorporates best practices from the broader software quality community.

@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
+	"github.com/gaskaj/OpenAgentFramework/internal/config"
 	"github.com/spf13/cobra"
 )
 

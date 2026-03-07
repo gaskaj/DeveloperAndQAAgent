@@ -1,6 +1,6 @@
 # Test Coverage Documentation
 
-This document describes the comprehensive test coverage framework implemented for the DeveloperAndQAAgent project, including coverage collection, analysis, reporting, and quality gates.
+This document describes the comprehensive test coverage framework implemented for the OpenAgentFramework project, including coverage collection, analysis, reporting, and quality gates.
 
 ## Overview
 

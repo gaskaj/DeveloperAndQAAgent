@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
+	"github.com/gaskaj/OpenAgentFramework/internal/config"
+	"github.com/gaskaj/OpenAgentFramework/internal/state"
 	"github.com/spf13/cobra"
 )
 

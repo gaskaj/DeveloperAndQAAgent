@@ -6,12 +6,12 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/agent"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/creativity"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/workspace"
+	"github.com/gaskaj/OpenAgentFramework/internal/agent"
+	"github.com/gaskaj/OpenAgentFramework/internal/creativity"
+	"github.com/gaskaj/OpenAgentFramework/internal/ghub"
+	"github.com/gaskaj/OpenAgentFramework/internal/observability"
+	"github.com/gaskaj/OpenAgentFramework/internal/state"
+	"github.com/gaskaj/OpenAgentFramework/internal/workspace"
 )
 
 // DeveloperAgent monitors GitHub for issues and implements solutions.

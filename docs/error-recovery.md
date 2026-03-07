@@ -1,6 +1,6 @@
 # Error Recovery and State Consistency
 
-This document describes the comprehensive error recovery and state consistency validation system implemented for the DeveloperAndQAAgent.
+This document describes the comprehensive error recovery and state consistency validation system implemented for the OpenAgentFramework.
 
 ## Overview
 

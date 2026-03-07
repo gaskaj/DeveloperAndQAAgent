@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/gitops"
+	"github.com/gaskaj/OpenAgentFramework/internal/gitops"
 )
 
 // maxClosedIssues is the cap on closed issues fetched for context.

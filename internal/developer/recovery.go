@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/agent"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
+	"github.com/gaskaj/OpenAgentFramework/internal/agent"
+	"github.com/gaskaj/OpenAgentFramework/internal/state"
 )
 
 // RecoveryManager handles workflow recovery and cleanup operations.

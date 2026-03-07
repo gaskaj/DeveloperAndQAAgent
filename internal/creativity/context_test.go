@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/gitops"
+	"github.com/gaskaj/OpenAgentFramework/internal/gitops"
 	"github.com/go-git/go-git/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

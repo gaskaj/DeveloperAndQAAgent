@@ -1,6 +1,6 @@
 # CLAUDE.md — Project Orientation
 
-DeveloperAndQAAgent is an autonomous Go agent that monitors GitHub issues, uses Claude to analyze and implement solutions, and creates pull requests. GitHub is the coordination layer (issues, labels, PRs); Claude is the AI engine.
+OpenAgentFramework is an autonomous Go agent that monitors GitHub issues, uses Claude to analyze and implement solutions, and creates pull requests. GitHub is the coordination layer (issues, labels, PRs); Claude is the AI engine.
 
 ## Quick Reference
 

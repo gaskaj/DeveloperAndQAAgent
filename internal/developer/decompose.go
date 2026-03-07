@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/claude"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
+	"github.com/gaskaj/OpenAgentFramework/internal/claude"
+	"github.com/gaskaj/OpenAgentFramework/internal/state"
 	"github.com/google/go-github/v68/github"
 )
 

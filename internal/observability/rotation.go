@@ -14,7 +14,7 @@ import (
 
 	"compress/gzip"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
+	"github.com/gaskaj/OpenAgentFramework/internal/config"
 )
 
 // LogRotationManager handles log file rotation based on size, count, and age limits

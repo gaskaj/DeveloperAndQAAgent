@@ -8,27 +8,27 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/testing"
+	"github.com/gaskaj/OpenAgentFramework/internal/testing"
 )
 
 const (
 	version = "1.0.0"
-	
+
 	// Exit codes
 	exitSuccess         = 0
-	exitError          = 1
+	exitError           = 1
 	exitQualityGateFail = 2
 )
 
 // Config holds the configuration for coverage report generation.
 type Config struct {
-	ProfilePath    string
-	OutputFormat   string
-	OutputFile     string
-	ConfigPath     string
-	CheckGates     bool
-	Verbose        bool
-	ShowVersion    bool
+	ProfilePath  string
+	OutputFormat string
+	OutputFile   string
+	ConfigPath   string
+	CheckGates   bool
+	Verbose      bool
+	ShowVersion  bool
 }
 
 func main() {
@@ -90,7 +90,7 @@ func main() {
 		if config.Verbose {
 			fmt.Println("Checking quality gates...")
 		}
-		
+
 		passed := checkQualityGates(analyzer, config.Verbose)
 		if !passed {
 			if config.Verbose {
@@ -185,7 +185,7 @@ func generateJSONReport(analyzer *testing.CoverageAnalyzer) string {
       "covered_statements": %d,
       "threshold": %.1f,
       "threshold_met": %s
-    }`, packageName, stats.CoveragePercent, stats.TotalStatements, 
+    }`, packageName, stats.CoveragePercent, stats.TotalStatements,
 			stats.CoveredStmts, analyzer.GetThreshold(packageName), thresholdMet)
 	}
 
@@ -214,8 +214,8 @@ func generateTextReport(analyzer *testing.CoverageAnalyzer) string {
 			status = "FAIL"
 		}
 
-		report += fmt.Sprintf("%-20s %6.2f%% [%6.1f%%] %s\n", 
-			packageName, stats.CoveragePercent, 
+		report += fmt.Sprintf("%-20s %6.2f%% [%6.1f%%] %s\n",
+			packageName, stats.CoveragePercent,
 			analyzer.GetThreshold(packageName), status)
 	}
 
@@ -247,12 +247,12 @@ func checkQualityGates(analyzer *testing.CoverageAnalyzer, verbose bool) bool {
 	minOverallCoverage := 80.0
 	if overallCoverage < minOverallCoverage {
 		if verbose {
-			fmt.Printf("FAIL: Overall coverage (%.2f%%) below minimum (%.1f%%)\n", 
+			fmt.Printf("FAIL: Overall coverage (%.2f%%) below minimum (%.1f%%)\n",
 				overallCoverage, minOverallCoverage)
 		}
 		allPassed = false
 	} else if verbose {
-		fmt.Printf("PASS: Overall coverage (%.2f%%) meets minimum (%.1f%%)\n", 
+		fmt.Printf("PASS: Overall coverage (%.2f%%) meets minimum (%.1f%%)\n",
 			overallCoverage, minOverallCoverage)
 	}
 

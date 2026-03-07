@@ -17,7 +17,7 @@ The configuration management system provides:
 ### Basic Usage
 
 ```go
-import "github.com/gaskaj/DeveloperAndQAAgent/internal/config"
+import "github.com/gaskaj/OpenAgentFramework/internal/config"
 
 // Create configuration manager
 logger := slog.New(slog.NewTextHandler(os.Stdout, nil))

@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go/option"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
+	"github.com/gaskaj/OpenAgentFramework/internal/ghub"
+	"github.com/gaskaj/OpenAgentFramework/internal/state"
 	"github.com/google/go-github/v68/github"
 )
 

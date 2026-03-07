@@ -1,4 +1,4 @@
-module github.com/gaskaj/DeveloperAndQAAgent
+module github.com/gaskaj/OpenAgentFramework
 
 go 1.25.0
 

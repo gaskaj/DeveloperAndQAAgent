@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/config"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
+	"github.com/gaskaj/OpenAgentFramework/internal/config"
+	"github.com/gaskaj/OpenAgentFramework/internal/observability"
 )
 
 // Manager provides centralized error handling, retry, and circuit breaker management

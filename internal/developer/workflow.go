@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/claude"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/gitops"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/workspace"
+	"github.com/gaskaj/OpenAgentFramework/internal/claude"
+	"github.com/gaskaj/OpenAgentFramework/internal/ghub"
+	"github.com/gaskaj/OpenAgentFramework/internal/gitops"
+	"github.com/gaskaj/OpenAgentFramework/internal/observability"
+	"github.com/gaskaj/OpenAgentFramework/internal/state"
+	"github.com/gaskaj/OpenAgentFramework/internal/workspace"
 	"github.com/google/go-github/v68/github"
 )
 

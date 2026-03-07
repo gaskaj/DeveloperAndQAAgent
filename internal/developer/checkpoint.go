@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/observability"
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/state"
+	"github.com/gaskaj/OpenAgentFramework/internal/observability"
+	"github.com/gaskaj/OpenAgentFramework/internal/state"
 )
 
 // CheckpointManager handles workflow state checkpointing for the developer agent

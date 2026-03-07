@@ -35,3 +35,7 @@ workspaces/
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs
+Logs/
+*.log

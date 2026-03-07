@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gaskaj/DeveloperAndQAAgent/internal/ghub"
+	"github.com/gaskaj/OpenAgentFramework/internal/ghub"
 )
 
 // StateValidator provides comprehensive state consistency validation and reconciliation.

@@ -2,7 +2,7 @@
 
 ## System Overview
 
-DeveloperAndQAAgent is an autonomous development agent framework. It polls GitHub for issues labeled `agent:ready`, uses Claude to analyze and implement solutions, then creates pull requests for human review.
+OpenAgentFramework is an autonomous development agent framework. It polls GitHub for issues labeled `agent:ready`, uses Claude to analyze and implement solutions, then creates pull requests for human review.
 
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
