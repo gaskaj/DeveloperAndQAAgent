@@ -80,7 +80,7 @@ agents:
     # issue to agent:ready when idle (no active work across any agents).
     # Only promotes suggestions that have NOT been previously failed or rejected.
     # Promotes at most one suggestion at a time.
-    allow_auto_issue_processing: false
+    allow_auto_issue_processing: true
     
     # Workspace persistence configuration
     workspace:

@@ -441,6 +441,17 @@ func (d *DeveloperAgent) promoteOneSuggestion(ctx context.Context) error {
 		}
 	}
 
+	// Check for open pull requests — do not promote if any exist
+	openPRs, err := d.Deps.GitHub.ListPRs(ctx, "open")
+	if err != nil {
+		d.logger().Debug("failed to list open PRs for auto-processing check", "error", err)
+		return nil
+	}
+	if len(openPRs) > 0 {
+		d.logger().Debug("open PRs exist, skipping auto-issue promotion", "open_prs", len(openPRs))
+		return nil
+	}
+
 	// List issues with agent:suggestion label
 	suggestions, err := d.Deps.GitHub.ListIssues(ctx, []string{"agent:suggestion"})
 	if err != nil {
