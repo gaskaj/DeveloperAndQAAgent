@@ -1,0 +1,260 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: controlplane-config
+  namespace: openagentframework
+  labels:
+    app: oaf-controlplane
+data:
+  config.yaml: |
+    # Production Control Plane Configuration
+    server:
+      port: 8080
+      host: "0.0.0.0"
+      read_timeout: 30s
+      write_timeout: 30s
+      idle_timeout: 60s
+      shutdown_timeout: 30s
+      
+    database:
+      driver: postgres
+      max_open_conns: 25
+      max_idle_conns: 5
+      conn_max_lifetime: 300s
+      conn_max_idle_time: 60s
+      
+    auth:
+      jwt_expiry: 24h
+      refresh_expiry: 168h
+      password_min_length: 8
+      max_login_attempts: 5
+      lockout_duration: 900s
+      
+    logging:
+      level: info
+      format: json
+      structured: true
+      
+    metrics:
+      enabled: true
+      port: 9090
+      path: /metrics
+      
+    health:
+      enabled: true
+      path: /healthz
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-config
+  namespace: openagentframework
+  labels:
+    app: oaf-agent
+data:
+  config.yaml: |
+    # Production Agent Configuration
+    github:
+      poll_interval: 60s
+      
+    logging:
+      level: info
+      format: json
+      enable_correlation: true
+      file_path: /var/log/agentctl/agent.log
+      rotation:
+        enabled: true
+        max_file_size_mb: 100
+        max_files: 10
+        max_age: 720h
+        compress_old: true
+        check_interval: 1h
+      cleanup:
+        enabled: true
+        retention_days: 90
+        min_free_disk_mb: 5120
+        cleanup_interval: 6h
+        archive_before_delete: true
+      structured_logging:
+        enabled: true
+        format: json
+        include_caller: false
+        include_stack_trace: false
+        correlation:
+          enabled: true
+          auto_generate: true
+          include_workflow_stage: true
+          include_agent_metadata: true
+          propagate_github_context: true
+        workflow_tracking:
+          enabled: true
+          track_handoffs: true
+          track_decisions: true
+          include_performance: true
+          track_tool_usage: true
+        performance:
+          track_durations: true
+          memory_snapshots: false
+          llm_metrics: true
+          workflow_timing: true
+        filtering:
+          debug_sampling_rate: 0.0
+          include_errors: true
+          include_warnings: true
+        export:
+          enabled: true
+          field_mappings:
+            datadog:
+              correlation_id: "dd.trace_id"
+              timestamp: "@timestamp"
+      multi_agent_observability:
+        cross_agent_tracking: true
+        communication_patterns: true
+        performance_comparison: true
+        workflow_efficiency: true
+        alerting:
+          lost_correlation_threshold: 0.05
+          handoff_timeout_seconds: 300
+          stage_stall_threshold_seconds: 1800
+          tool_failure_rate_threshold: 0.3
+          
+    agents:
+      developer:
+        enabled: true
+        max_concurrent: 3
+        workspace_dir: /var/lib/agentctl/workspaces
+        recovery:
+          enabled: true
+          startup_validation: true
+          auto_cleanup_orphaned: true
+          max_resume_age: 24h
+          validation_interval: 5m
+        workspace:
+          persistence:
+            enabled: true
+            snapshot_interval: 10m
+            max_snapshots: 5
+            retention_hours: 48
+            compress_snapshots: true
+            resume_on_restart: true
+            validate_before_resume: true
+            
+    creativity:
+      enabled: false
+      
+    decomposition:
+      enabled: true
+      max_iteration_budget: 50
+      max_subtasks: 5
+      
+    metrics:
+      enabled: true
+      collection_interval: 60s
+      export:
+        prometheus:
+          enabled: true
+          port: 9090
+          path: /metrics
+        logs:
+          enabled: true
+          interval: 300s
+          
+    observability:
+      tracing:
+        enabled: true
+        sample_rate: 0.1
+      health:
+        enabled: true
+        port: 8080
+        path: /healthz
+      performance:
+        track_durations: true
+        memory_monitoring: true
+        interval: 60s
+        
+    workspace:
+      cleanup:
+        enabled: true
+        success_retention: 24h
+        failure_retention: 168h
+        max_concurrent: 2
+      limits:
+        max_size_mb: 5120
+        min_free_disk_mb: 10240
+      monitoring:
+        disk_check_interval: 5m
+        cleanup_interval: 1h
+        
+    error_handling:
+      retry:
+        enabled: true
+        default:
+          max_attempts: 5
+          base_delay: 2s
+          max_delay: 60s
+          backoff_factor: 2.0
+          jitter_factor: 0.2
+        policies:
+          github_api:
+            max_attempts: 8
+            base_delay: 5s
+            max_delay: 300s
+          claude_api:
+            max_attempts: 5
+            base_delay: 3s
+            max_delay: 120s
+      circuit_breaker:
+        enabled: true
+        default:
+          max_failures: 10
+          timeout: 300s
+          max_requests: 5
+          failure_ratio: 0.3
+          min_requests: 10
+        breakers:
+          github_api:
+            max_failures: 20
+            timeout: 600s
+            failure_ratio: 0.2
+          claude_api:
+            max_failures: 15
+            timeout: 180s
+            failure_ratio: 0.4
+            
+    shutdown:
+      timeout: 300s
+      cleanup_workspaces: false
+      reset_claims: true
+      
+    state:
+      backend: file
+      dir: /var/lib/agentctl/state
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+  namespace: openagentframework
+  labels:
+    app: postgres
+data:
+  01-init.sql: |
+    -- Create extensions
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+    
+    -- Grant permissions
+    GRANT ALL PRIVILEGES ON DATABASE oaf_controlplane TO oaf;
+  02-performance.sql: |
+    -- Performance tuning for production
+    ALTER SYSTEM SET shared_buffers = '256MB';
+    ALTER SYSTEM SET effective_cache_size = '1GB';
+    ALTER SYSTEM SET maintenance_work_mem = '64MB';
+    ALTER SYSTEM SET checkpoint_completion_target = 0.7;
+    ALTER SYSTEM SET wal_buffers = '16MB';
+    ALTER SYSTEM SET default_statistics_target = 100;
+    ALTER SYSTEM SET random_page_cost = 1.1;
+    ALTER SYSTEM SET effective_io_concurrency = 200;
+    SELECT pg_reload_conf();

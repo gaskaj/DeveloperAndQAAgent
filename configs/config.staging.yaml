@@ -1,0 +1,178 @@
+# Staging Environment Configuration
+# This file extends the base config.yaml for staging environment
+
+github:
+  poll_interval: 45s  # Slightly more frequent than production
+
+logging:
+  level: debug  # Debug logging for staging validation
+  format: json  # Structured logging
+  enable_correlation: true
+  file_path: /var/log/agentctl/agent.log
+  rotation:
+    enabled: true
+    max_file_size_mb: 50
+    max_files: 5
+    max_age: 168h  # 7 days
+    compress_old: true
+    check_interval: 30m
+  cleanup:
+    enabled: true
+    retention_days: 14
+    min_free_disk_mb: 2048  # 2GB minimum free
+    cleanup_interval: 2h
+    archive_before_delete: false  # No archiving in staging
+  structured_logging:
+    enabled: true
+    format: json
+    include_caller: true  # Debugging aid for staging
+    include_stack_trace: true  # Full traces for staging
+    correlation:
+      enabled: true
+      auto_generate: true
+      include_workflow_stage: true
+      include_agent_metadata: true
+      propagate_github_context: true
+    workflow_tracking:
+      enabled: true
+      track_handoffs: true
+      track_decisions: true
+      include_performance: true
+      track_tool_usage: true
+    performance:
+      track_durations: true
+      memory_snapshots: true  # Enable for staging testing
+      llm_metrics: true
+      workflow_timing: true
+    filtering:
+      debug_sampling_rate: 1.0  # Full debug logging in staging
+      include_errors: true
+      include_warnings: true
+    export:
+      enabled: true
+      field_mappings:
+        datadog:
+          correlation_id: "dd.trace_id"
+          timestamp: "@timestamp"
+  multi_agent_observability:
+    cross_agent_tracking: true
+    communication_patterns: true
+    performance_comparison: true
+    workflow_efficiency: true
+    alerting:
+      lost_correlation_threshold: 0.1
+      handoff_timeout_seconds: 600  # Longer timeout for staging
+      stage_stall_threshold_seconds: 3600
+      tool_failure_rate_threshold: 0.5
+
+agents:
+  developer:
+    enabled: true
+    max_concurrent: 2  # Limited for staging
+    workspace_dir: /var/lib/agentctl/workspaces
+    recovery:
+      enabled: true
+      startup_validation: true
+      auto_cleanup_orphaned: true
+      max_resume_age: 12h  # Shorter for staging
+      validation_interval: 2m
+    workspace:
+      persistence:
+        enabled: true
+        snapshot_interval: 5m
+        max_snapshots: 3
+        retention_hours: 24
+        compress_snapshots: false  # No compression in staging
+        resume_on_restart: true
+        validate_before_resume: true
+
+creativity:
+  enabled: true  # Enable creativity in staging for testing
+
+decomposition:
+  enabled: true
+  max_iteration_budget: 30  # Lower budget for staging
+  max_subtasks: 3
+
+metrics:
+  enabled: true
+  collection_interval: 30s
+  export:
+    prometheus:
+      enabled: true
+      port: 9090
+      path: /metrics
+    logs:
+      enabled: true
+      interval: 120s  # 2 minute intervals
+
+observability:
+  tracing:
+    enabled: true
+    sample_rate: 0.5  # Higher sampling for staging validation
+  health:
+    enabled: true
+    port: 8080
+    path: /healthz
+  performance:
+    track_durations: true
+    memory_monitoring: true
+    interval: 30s
+
+workspace:
+  cleanup:
+    enabled: true
+    success_retention: 12h      # Shorter retention for staging
+    failure_retention: 72h      # Keep failures for 3 days
+    max_concurrent: 1
+  limits:
+    max_size_mb: 2048          # 2GB limit per workspace
+    min_free_disk_mb: 4096     # 4GB minimum free
+  monitoring:
+    disk_check_interval: 2m
+    cleanup_interval: 30m
+
+error_handling:
+  retry:
+    enabled: true
+    default:
+      max_attempts: 3
+      base_delay: 1s
+      max_delay: 30s
+      backoff_factor: 2.0
+      jitter_factor: 0.1
+    policies:
+      github_api:
+        max_attempts: 5
+        base_delay: 2s
+        max_delay: 120s
+      claude_api:
+        max_attempts: 3
+        base_delay: 2s
+        max_delay: 60s
+  circuit_breaker:
+    enabled: true
+    default:
+      max_failures: 5
+      timeout: 120s
+      max_requests: 3
+      failure_ratio: 0.4
+      min_requests: 5
+    breakers:
+      github_api:
+        max_failures: 10
+        timeout: 300s
+        failure_ratio: 0.3
+      claude_api:
+        max_failures: 8
+        timeout: 90s
+        failure_ratio: 0.5
+
+shutdown:
+  timeout: 120s  # 2 minutes for staging shutdown
+  cleanup_workspaces: true  # Clean up on shutdown in staging
+  reset_claims: true
+
+state:
+  backend: file
+  dir: /var/lib/agentctl/state

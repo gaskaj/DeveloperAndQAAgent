@@ -1,0 +1,237 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: oaf-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: oaf_controlplane
+      POSTGRES_USER: ${DB_USER:-oaf}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/pg-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-oaf} -d oaf_controlplane"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    networks:
+      - oaf-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: oaf-redis-prod
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    networks:
+      - oaf-network
+
+  controlplane:
+    build:
+      context: .
+      dockerfile: Dockerfile.controlplane
+      target: production
+    container_name: oaf-controlplane-prod
+    restart: unless-stopped
+    ports:
+      - "${CONTROLPLANE_PORT:-8080}:8080"
+      - "${METRICS_PORT:-9090}:9090"
+    environment:
+      - ENV=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-oaf}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=oaf_controlplane
+      - JWT_SECRET=${JWT_SECRET}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - METRICS_ENABLED=true
+      - HEALTH_CHECK_ENABLED=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./configs/controlplane.prod.yaml:/app/config.yaml:ro
+      - controlplane_logs:/var/log/controlplane
+      - controlplane_state:/var/lib/controlplane/state
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+        delay: 30s
+    networks:
+      - oaf-network
+
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: oaf-agent-prod
+    restart: unless-stopped
+    environment:
+      - ENV=production
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - CONTROLPLANE_URL=http://controlplane:8080
+    volumes:
+      - ./configs/config.prod.yaml:/app/config.yaml:ro
+      - agent_workspaces:/var/lib/agentctl/workspaces
+      - agent_state:/var/lib/agentctl/state
+      - agent_logs:/var/log/agentctl
+    depends_on:
+      controlplane:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/bin/agentctl", "status", "--config", "/app/config.yaml"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+      restart_policy:
+        condition: on-failure
+        max_attempts: 5
+        delay: 60s
+    networks:
+      - oaf-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: oaf-frontend-prod
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+      - "${FRONTEND_SSL_PORT:-443}:443"
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8080}
+      - NGINX_GZIP=on
+      - NGINX_CLIENT_MAX_BODY_SIZE=10m
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - controlplane
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    networks:
+      - oaf-network
+
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: oaf-nginx-proxy-prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/proxy.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - frontend
+      - controlplane
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    networks:
+      - oaf-network
+
+networks:
+  oaf-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  controlplane_logs:
+    driver: local
+  controlplane_state:
+    driver: local
+  agent_workspaces:
+    driver: local
+  agent_state:
+    driver: local
+  agent_logs:
+    driver: local
+  nginx_logs:
+    driver: local
