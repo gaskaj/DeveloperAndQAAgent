@@ -11,7 +11,8 @@ import (
 
 // PgUserStore implements user persistence with PostgreSQL.
 type PgUserStore struct {
-	pool *pgxpool.Pool
+	pool    *pgxpool.Pool
+	monitor *QueryMonitor
 }
 
 func (s *PgUserStore) Create(ctx context.Context, user *User) error {

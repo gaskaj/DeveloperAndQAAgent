@@ -286,6 +286,69 @@ func (m *Metrics) RecordValidationResults(ctx context.Context, agentType string,
 	}
 }
 
+// RecordDatabaseOperation records metrics for database operations
+func (m *Metrics) RecordDatabaseOperation(ctx context.Context, operation string, duration time.Duration, success bool) {
+	labels := map[string]string{
+		"operation": operation,
+	}
+
+	m.Inc("database_operations_total", labels)
+	m.Observe("database_operation_duration_ms", float64(duration.Milliseconds()), labels)
+
+	if success {
+		m.Inc("database_operations_success_total", labels)
+	} else {
+		m.Inc("database_operations_failure_total", labels)
+	}
+
+	// Log to structured logger
+	if m.logger != nil {
+		successStr := "success"
+		if !success {
+			successStr = "failure"
+		}
+		m.logger.LogPerformanceMetric(ctx, "database_operation", float64(duration.Milliseconds()), "ms",
+			map[string]string{
+				"operation": operation,
+				"status":    successStr,
+			})
+	}
+}
+
+// RecordDatabaseConnectionPool records connection pool metrics
+func (m *Metrics) RecordDatabaseConnectionPool(ctx context.Context, totalConns, idleConns, acquiredConns, maxConns int) {
+	poolLabels := map[string]string{
+		"pool_type": "postgresql",
+	}
+
+	m.Set("database_pool_total_connections", float64(totalConns), poolLabels)
+	m.Set("database_pool_idle_connections", float64(idleConns), poolLabels)
+	m.Set("database_pool_acquired_connections", float64(acquiredConns), poolLabels)
+	m.Set("database_pool_max_connections", float64(maxConns), poolLabels)
+
+	// Calculate utilization percentage
+	utilization := float64(acquiredConns) / float64(maxConns) * 100
+	m.Set("database_pool_utilization_percent", utilization, poolLabels)
+}
+
+// RecordSlowQuery records metrics for slow database queries
+func (m *Metrics) RecordSlowQuery(ctx context.Context, operation string, duration time.Duration) {
+	labels := map[string]string{
+		"operation": operation,
+	}
+
+	m.Inc("database_slow_queries_total", labels)
+	m.Observe("database_slow_query_duration_ms", float64(duration.Milliseconds()), labels)
+
+	// Log to structured logger
+	if m.logger != nil {
+		m.logger.LogPerformanceMetric(ctx, "slow_database_query", float64(duration.Milliseconds()), "ms",
+			map[string]string{
+				"operation": operation,
+			})
+	}
+}
+
 // metricKey creates a unique key for a metric with labels
 func (m *Metrics) metricKey(name string, labels map[string]string) string {
 	key := name

@@ -339,4 +339,126 @@ export:
 
 6. **Structure error handling**: Include correlation IDs in error logs for easier debugging
 
+## Database Operation Logging
+
+The control plane includes comprehensive database operation logging integrated with the structured logging system:
+
+### Database Query Logging
+
+All database operations are automatically logged with correlation IDs and performance metrics:
+
+```json
+{
+  "timestamp": "2026-03-01T23:40:15.234Z",
+  "level": "WARN",
+  "msg": "slow database query",
+  "correlation_id": "b5dd0689a7fa0e1a",
+  "sql": "SELECT * FROM agents WHERE org_id = $1 AND status = $2",
+  "duration_ms": 150,
+  "operation": "query",
+  "slow_query": true,
+  "request_method": "GET",
+  "request_path": "/api/v1/agents"
+}
+```
+
+### Database Performance Metrics
+
+Database operations generate structured performance metrics:
+
+```json
+{
+  "timestamp": "2026-03-01T23:40:20.456Z", 
+  "level": "INFO",
+  "msg": "performance_metric",
+  "correlation_id": "b5dd0689a7fa0e1a",
+  "metric_name": "database_operation",
+  "value": 25,
+  "unit": "ms",
+  "label_operation": "select",
+  "label_status": "success"
+}
+```
+
+### Connection Pool Monitoring
+
+Connection pool status is logged during health checks:
+
+```json
+{
+  "timestamp": "2026-03-01T23:40:25.789Z",
+  "level": "INFO", 
+  "msg": "database_pool_status",
+  "total_connections": 15,
+  "idle_connections": 8,
+  "acquired_connections": 7,
+  "max_connections": 25,
+  "utilization_percent": 60.0,
+  "pool_healthy": true
+}
+```
+
+### Database Error Logging
+
+Database errors include full context and correlation information:
+
+```json
+{
+  "timestamp": "2026-03-01T23:40:30.123Z",
+  "level": "ERROR",
+  "msg": "database_operation_failed",
+  "correlation_id": "b5dd0689a7fa0e1a", 
+  "error": "connection timeout",
+  "sql": "UPDATE agents SET last_heartbeat = NOW() WHERE id = $1",
+  "operation": "exec",
+  "retry_attempt": 2,
+  "max_retries": 3,
+  "will_retry": true
+}
+```
+
+### Configuration for Database Logging
+
+Database operation logging is configured in the performance section:
+
+```yaml
+database:
+  performance:
+    enable_query_log: true        # Log all database queries
+    slow_query_threshold: "100ms" # Log queries slower than this
+    enable_metrics: true          # Generate Prometheus metrics
+    query_timeout: "30s"          # Maximum query execution time
+```
+
+### Integration with Request Tracing
+
+Database operations are automatically correlated with HTTP requests:
+
+1. **Request Middleware** adds correlation ID to request context
+2. **Query Monitor** includes correlation ID in all database logs  
+3. **Structured Logger** correlates database operations with request traces
+
+Example correlated logs:
+```json
+// HTTP Request
+{
+  "level": "INFO",
+  "msg": "http request",
+  "method": "GET", 
+  "path": "/api/v1/agents",
+  "status": 200,
+  "duration_ms": 45,
+  "correlation_id": "b5dd0689a7fa0e1a"
+}
+
+// Database Query (same correlation_id)
+{
+  "level": "INFO",
+  "msg": "database_query",
+  "sql": "SELECT * FROM agents WHERE org_id = $1",
+  "duration_ms": 25,
+  "correlation_id": "b5dd0689a7fa0e1a"
+}
+```
+
 This implementation provides the foundation for comprehensive observability in multi-agent systems while maintaining backward compatibility with existing logging infrastructure.

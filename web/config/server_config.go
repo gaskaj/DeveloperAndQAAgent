@@ -44,6 +44,26 @@ type DatabaseConfig struct {
 	MaxOpenConns    int           `mapstructure:"max_open_conns"`
 	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
 	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
+	Pool            PoolConfig    `mapstructure:"pool"`
+	Performance     PerfConfig    `mapstructure:"performance"`
+}
+
+// PoolConfig holds connection pool specific settings.
+type PoolConfig struct {
+	MaxConnections      int           `mapstructure:"max_connections"`
+	MinConnections      int           `mapstructure:"min_connections"`
+	MaxIdleTime         time.Duration `mapstructure:"max_idle_time"`
+	HealthCheckPeriod   time.Duration `mapstructure:"health_check_period"`
+	MaxConnLifetime     time.Duration `mapstructure:"max_conn_lifetime"`
+	MaxConnIdleTime     time.Duration `mapstructure:"max_conn_idle_time"`
+}
+
+// PerfConfig holds query performance monitoring settings.
+type PerfConfig struct {
+	SlowQueryThreshold time.Duration `mapstructure:"slow_query_threshold"`
+	QueryTimeout       time.Duration `mapstructure:"query_timeout"`
+	EnableQueryLog     bool          `mapstructure:"enable_query_log"`
+	EnableMetrics      bool          `mapstructure:"enable_metrics"`
 }
 
 // DSN returns the PostgreSQL connection string.
@@ -149,6 +169,36 @@ func Load(path string) (*ServerConfig, error) {
 	}
 	if cfg.Database.ConnMaxLifetime == 0 {
 		cfg.Database.ConnMaxLifetime = 5 * time.Minute
+	}
+	if cfg.Database.Pool.MaxConnections == 0 {
+		cfg.Database.Pool.MaxConnections = 25
+	}
+	if cfg.Database.Pool.MinConnections == 0 {
+		cfg.Database.Pool.MinConnections = 5
+	}
+	if cfg.Database.Pool.MaxIdleTime == 0 {
+		cfg.Database.Pool.MaxIdleTime = 30 * time.Minute
+	}
+	if cfg.Database.Pool.HealthCheckPeriod == 0 {
+		cfg.Database.Pool.HealthCheckPeriod = 1 * time.Minute
+	}
+	if cfg.Database.Pool.MaxConnLifetime == 0 {
+		cfg.Database.Pool.MaxConnLifetime = 1 * time.Hour
+	}
+	if cfg.Database.Pool.MaxConnIdleTime == 0 {
+		cfg.Database.Pool.MaxConnIdleTime = 15 * time.Minute
+	}
+	if cfg.Database.Performance.SlowQueryThreshold == 0 {
+		cfg.Database.Performance.SlowQueryThreshold = 100 * time.Millisecond
+	}
+	if cfg.Database.Performance.QueryTimeout == 0 {
+		cfg.Database.Performance.QueryTimeout = 30 * time.Second
+	}
+	if !cfg.Database.Performance.EnableQueryLog {
+		cfg.Database.Performance.EnableQueryLog = true
+	}
+	if !cfg.Database.Performance.EnableMetrics {
+		cfg.Database.Performance.EnableMetrics = true
 	}
 	if cfg.Auth.JWTExpiry == 0 {
 		cfg.Auth.JWTExpiry = 15 * time.Minute

@@ -1,9 +1,12 @@
 package middleware
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/gaskaj/OpenAgentFramework/internal/observability"
 )
 
 type responseWriter struct {
@@ -42,4 +45,52 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			)
 		})
 	}
+}
+
+// DatabaseQueryLogger returns middleware that adds database query logging context.
+func DatabaseQueryLogger(logger *slog.Logger, metrics *observability.Metrics) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Add correlation ID to context for database query tracing
+			correlationID := observability.NewCorrelationID()
+			ctx := observability.WithCorrelationID(r.Context(), correlationID)
+			r = r.WithContext(ctx)
+
+			// Add query logging context
+			ctx = context.WithValue(ctx, "request_method", r.Method)
+			ctx = context.WithValue(ctx, "request_path", r.URL.Path)
+			r = r.WithContext(ctx)
+
+			rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
+
+			next.ServeHTTP(rw, r)
+
+			// Log database query metrics if available in context
+			if queryCount, ok := ctx.Value("db_query_count").(int); ok {
+				if metrics != nil {
+					labels := map[string]string{
+						"method": r.Method,
+						"path":   r.URL.Path,
+						"status": string(rune(rw.status)),
+					}
+					metrics.Set("http_request_db_queries", float64(queryCount), labels)
+				}
+
+				logger.Debug("database queries for request",
+					"method", r.Method,
+					"path", r.URL.Path,
+					"query_count", queryCount,
+					"correlation_id", correlationID,
+				)
+			}
+		})
+	}
+}
+
+// DatabaseOperationContext holds database operation tracking information.
+type DatabaseOperationContext struct {
+	QueryCount   int
+	TotalTimeMs  int64
+	SlowQueries  int
+	ErrorQueries int
 }

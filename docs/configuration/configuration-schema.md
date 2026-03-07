@@ -509,3 +509,206 @@ agentctl config env-vars
 # Skip network validation for faster checking
 agentctl config validate --config=config.yaml --skip-network
 ```
+
+## Database Configuration
+
+Configuration for PostgreSQL database connections and performance optimization.
+
+```yaml
+database:
+  host: "${DB_HOST}"                 # Optional: Database host (default: "localhost")
+  port: 5432                         # Optional: Database port (default: 5432)
+  name: "${DB_NAME}"                 # Required: Database name
+  user: "${DB_USER}"                 # Required: Database user
+  password: "${DB_PASSWORD}"         # Required: Database password
+  sslmode: "require"                 # Optional: SSL mode (default: "disable")
+  
+  # Legacy connection pool settings (deprecated - use pool.* instead)
+  max_open_conns: 25                 # Optional: Max connections (default: 25)
+  max_idle_conns: 5                  # Optional: Max idle connections (default: 5)
+  conn_max_lifetime: "5m"            # Optional: Connection lifetime (default: 5m)
+  
+  # Advanced connection pool configuration
+  pool:
+    max_connections: 50              # Optional: Maximum concurrent connections (default: 25)
+    min_connections: 10              # Optional: Minimum idle connections (default: 5)
+    max_idle_time: "30m"            # Optional: Close idle connections after (default: 30m)
+    health_check_period: "1m"        # Optional: Health check interval (default: 1m)
+    max_conn_lifetime: "1h"          # Optional: Maximum connection lifetime (default: 1h)
+    max_conn_idle_time: "15m"        # Optional: Maximum idle time per connection (default: 15m)
+    
+  # Query performance monitoring
+  performance:
+    slow_query_threshold: "100ms"    # Optional: Log queries slower than this (default: 100ms)
+    query_timeout: "30s"             # Optional: Maximum query execution time (default: 30s)
+    enable_query_log: true           # Optional: Enable query performance logging (default: true)
+    enable_metrics: true             # Optional: Enable Prometheus metrics (default: true)
+```
+
+### Database Environment Variables
+
+| Variable | Config Key | Required | Description |
+|----------|------------|----------|-------------|
+| `DB_HOST` | `database.host` | No | Database host |
+| `DB_PORT` | `database.port` | No | Database port |
+| `DB_NAME` | `database.name` | Yes | Database name |
+| `DB_USER` | `database.user` | Yes | Database username |
+| `DB_PASSWORD` | `database.password` | Yes | Database password |
+
+### Database Defaults
+
+| Field | Default Value | Description |
+|-------|---------------|-------------|
+| `host` | `"localhost"` | Local database connection |
+| `port` | `5432` | Standard PostgreSQL port |
+| `sslmode` | `"disable"` | No SSL for local development |
+| `pool.max_connections` | `25` | Conservative connection limit |
+| `pool.min_connections` | `5` | Maintain minimum availability |
+| `pool.max_idle_time` | `30m` | Clean up idle connections |
+| `pool.health_check_period` | `1m` | Regular health checks |
+| `performance.slow_query_threshold` | `100ms` | Log slow queries |
+| `performance.query_timeout` | `30s` | Prevent runaway queries |
+
+### Database Validation Rules
+
+- **Connection Pool Settings**:
+  - `max_connections` must be greater than `min_connections`
+  - `max_connections` should not exceed 200 (PostgreSQL limits)
+  - `min_connections` must be at least 1
+  
+- **Timeout Settings**:
+  - `query_timeout` must be at least 1 second
+  - `slow_query_threshold` must be positive
+  - `max_idle_time` must be at least 1 minute
+  
+- **SSL Configuration**:
+  - `sslmode` must be one of: "disable", "require", "verify-ca", "verify-full"
+  - Production environments should use "require" or stronger
+
+### Database Example Configurations
+
+#### Development Database Configuration
+
+```yaml
+database:
+  host: "localhost"
+  name: "agentframework_dev"
+  user: "developer"
+  password: "${DB_PASSWORD}"
+  sslmode: "disable"  # OK for local development
+  
+  pool:
+    max_connections: 10     # Small pool for development
+    min_connections: 2
+    max_idle_time: "15m"
+    
+  performance:
+    slow_query_threshold: "50ms"  # Stricter for development
+    enable_query_log: true
+    enable_metrics: true
+```
+
+#### Production Database Configuration
+
+```yaml
+database:
+  host: "${DB_HOST}"
+  port: 5432
+  name: "${DB_NAME}"
+  user: "${DB_USER}"
+  password: "${DB_PASSWORD}"
+  sslmode: "require"      # Require SSL in production
+  
+  pool:
+    max_connections: 50         # Higher capacity for production
+    min_connections: 10         # Ensure availability
+    max_idle_time: "15m"        # Aggressive cleanup
+    health_check_period: "30s"  # Frequent health checks
+    max_conn_lifetime: "2h"     # Periodic rotation
+    max_conn_idle_time: "10m"   # Quick idle cleanup
+    
+  performance:
+    slow_query_threshold: "100ms"
+    query_timeout: "30s"
+    enable_query_log: true
+    enable_metrics: true
+```
+
+#### High-Performance Database Configuration
+
+```yaml
+database:
+  host: "${DB_HOST}"
+  name: "${DB_NAME}"
+  user: "${DB_USER}"
+  password: "${DB_PASSWORD}"
+  sslmode: "require"
+  
+  pool:
+    max_connections: 100        # High capacity
+    min_connections: 20         # Large baseline
+    max_idle_time: "10m"        # Fast cleanup
+    health_check_period: "15s"  # Very frequent checks
+    max_conn_lifetime: "1h"     # Faster rotation
+    max_conn_idle_time: "5m"    # Minimal idle time
+    
+  performance:
+    slow_query_threshold: "50ms"   # Stricter performance
+    query_timeout: "15s"           # Faster timeout
+    enable_query_log: true
+    enable_metrics: true
+```
+
+### Database Troubleshooting
+
+#### Connection Pool Issues
+
+1. **"failed to acquire connection from pool"**
+   ```bash
+   # Check pool configuration
+   curl -s http://localhost:8080/health | jq '.database.pool'
+   
+   # Increase max_connections if utilization > 80%
+   ```
+
+2. **High connection pool utilization**
+   ```yaml
+   database:
+     pool:
+       max_connections: 100  # Increase from 25
+       min_connections: 20   # Increase proportionally
+   ```
+
+#### Query Performance Issues
+
+1. **Too many slow queries**
+   ```bash
+   # Check slow query logs
+   grep "slow database query" logs/app.log
+   
+   # Reduce slow_query_threshold to identify more queries
+   ```
+
+2. **Database timeouts**
+   ```yaml
+   database:
+     performance:
+       query_timeout: "60s"  # Increase from 30s
+       slow_query_threshold: "200ms"  # Relax threshold
+   ```
+
+#### SSL/TLS Issues
+
+1. **SSL connection failures in production**
+   ```yaml
+   database:
+     sslmode: "require"  # Ensure SSL is required
+     # Or for stricter validation:
+     sslmode: "verify-full"
+   ```
+
+2. **Development SSL certificate issues**
+   ```yaml
+   database:
+     sslmode: "disable"  # OK for local development only
+   ```

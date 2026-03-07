@@ -11,7 +11,8 @@ import (
 
 // PgOrgStore implements organization persistence with PostgreSQL.
 type PgOrgStore struct {
-	pool *pgxpool.Pool
+	pool    *pgxpool.Pool
+	monitor *QueryMonitor
 }
 
 func (s *PgOrgStore) Create(ctx context.Context, org *Organization) error {

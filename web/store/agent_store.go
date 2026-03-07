@@ -11,7 +11,8 @@ import (
 
 // PgAgentStore implements agent persistence with PostgreSQL.
 type PgAgentStore struct {
-	pool *pgxpool.Pool
+	pool    *pgxpool.Pool
+	monitor *QueryMonitor
 }
 
 func (s *PgAgentStore) Register(ctx context.Context, agent *Agent) error {

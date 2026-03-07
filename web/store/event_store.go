@@ -13,7 +13,8 @@ import (
 
 // PgEventStore implements agent event persistence with PostgreSQL.
 type PgEventStore struct {
-	pool *pgxpool.Pool
+	pool    *pgxpool.Pool
+	monitor *QueryMonitor
 }
 
 func (s *PgEventStore) Insert(ctx context.Context, event *AgentEvent) error {

@@ -12,7 +12,8 @@ import (
 
 // PgAPIKeyStore implements API key persistence with PostgreSQL.
 type PgAPIKeyStore struct {
-	pool *pgxpool.Pool
+	pool    *pgxpool.Pool
+	monitor *QueryMonitor
 }
 
 func (s *PgAPIKeyStore) Create(ctx context.Context, key *APIKey) error {

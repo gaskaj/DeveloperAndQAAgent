@@ -10,7 +10,8 @@ import (
 
 // PgAuditStore implements audit log persistence with PostgreSQL.
 type PgAuditStore struct {
-	pool *pgxpool.Pool
+	pool    *pgxpool.Pool
+	monitor *QueryMonitor
 }
 
 func (s *PgAuditStore) Log(ctx context.Context, entry *AuditLog) error {

@@ -11,7 +11,8 @@ import (
 
 // PgInvitationStore implements invitation persistence with PostgreSQL.
 type PgInvitationStore struct {
-	pool *pgxpool.Pool
+	pool    *pgxpool.Pool
+	monitor *QueryMonitor
 }
 
 func (s *PgInvitationStore) Create(ctx context.Context, inv *Invitation) error {
