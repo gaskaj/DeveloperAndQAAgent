@@ -199,6 +199,18 @@ creativity:
   # Recommended: 50-200
   max_rejection_history: 50
 
+memory:
+  # Enable persistent repository memory to improve Claude efficiency
+  # When enabled, learnings from previous issues are stored and reused
+  # across future analysis, implementation, and creative thinking cycles
+  enabled: true
+  # Maximum number of memory entries per repository
+  max_entries: 100
+  # Maximum characters of memory injected into prompts
+  max_prompt_size: 8000
+  # Extract learnings after successful implementation
+  extract_on_complete: true
+
 decomposition:
   # Enable automatic issue decomposition for complex issues
   # When enabled, the agent estimates complexity during analysis and breaks

@@ -152,7 +152,7 @@ func TestGatherContext(t *testing.T) {
 			rejectedIssues: nil,
 		}
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		ctx, err := engine.gatherContext(context.Background())
 		require.NoError(t, err)
@@ -178,7 +178,7 @@ func TestGatherContext(t *testing.T) {
 			closedIssues: closedIssues,
 		}
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		ctx, err := engine.gatherContext(context.Background())
 		require.NoError(t, err)
@@ -192,7 +192,7 @@ func TestGatherContext(t *testing.T) {
 			closedIssuesErr: fmt.Errorf("API error"),
 		}
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		ctx, err := engine.gatherContext(context.Background())
 		require.NoError(t, err) // Should not fail

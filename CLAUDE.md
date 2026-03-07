@@ -37,6 +37,7 @@ internal/
   config/                     Config loading (Viper), validation, defaults
   state/                      WorkflowState enum, AgentWorkState, file-based Store
   creativity/                 Idle-mode suggestion engine
+  memory/                     Persistent repo memory for Claude efficiency
   integration/                Integration tests: agent communication, handoffs, shared state
   errors/                     Retry with backoff, circuit breakers, error classification
   observability/              Structured logger, correlation IDs, metrics
@@ -134,7 +135,7 @@ Required env vars: `GITHUB_TOKEN`, `ANTHROPIC_API_KEY`
 
 Config file: `configs/config.yaml` — see [docs/configuration/configuration.md](docs/configuration/configuration.md) for full reference.
 
-Key sections: `github`, `claude`, `agents`, `state`, `logging`, `creativity`, `decomposition`, `error_handling`
+Key sections: `github`, `claude`, `agents`, `state`, `logging`, `creativity`, `decomposition`, `memory`, `error_handling`
 
 ## Deep-Dive Documentation
 
@@ -144,6 +145,7 @@ Key sections: `github`, `claude`, `agents`, `state`, `logging`, `creativity`, `d
 - [docs/guides/claude-integration.md](docs/guides/claude-integration.md) — Client, conversation loop, tools, prompts, SDK patterns
 - [docs/guides/github-integration.md](docs/guides/github-integration.md) — Client interface, poller, labels, branches, PRs
 - [docs/guides/code-conventions.md](docs/guides/code-conventions.md) — Error handling, naming, interfaces, logging, testing
+- [docs/guides/repository-memory.md](docs/guides/repository-memory.md) — Persistent repo memory system for Claude efficiency
 - [docs/configuration/configuration.md](docs/configuration/configuration.md) — Full YAML reference, env vars, defaults, validation
 - [docs/observability/structured-logging.md](docs/observability/structured-logging.md) — Observability, correlation IDs, metrics
 - [docs/testing/integration-testing.md](docs/testing/integration-testing.md) — Integration test suite, mock infrastructure, CI pipeline

@@ -14,6 +14,7 @@ import (
 	"github.com/gaskaj/OpenAgentFramework/internal/claude"
 	"github.com/gaskaj/OpenAgentFramework/internal/ghub"
 	"github.com/gaskaj/OpenAgentFramework/internal/gitops"
+	"github.com/gaskaj/OpenAgentFramework/internal/memory"
 	"github.com/gaskaj/OpenAgentFramework/internal/observability"
 	"github.com/gaskaj/OpenAgentFramework/internal/state"
 	"github.com/gaskaj/OpenAgentFramework/internal/workspace"
@@ -756,6 +757,13 @@ func (d *DeveloperAgent) analyze(ctx context.Context, issueContext, repoContext 
 
 	prompt := fmt.Sprintf(AnalyzePrompt, issueContext)
 
+	// Inject repo memory from previous work on this repository.
+	if d.memoryStore != nil {
+		if memCtx := d.memoryStore.FormatForPrompt(); memCtx != "" {
+			prompt += "\n\n" + memCtx
+		}
+	}
+
 	// Inject codebase structure so the plan is based on real files.
 	if repoContext != "" {
 		prompt += "\n\n" + repoContext
@@ -801,6 +809,13 @@ func (d *DeveloperAgent) implement(ctx context.Context, repo *gitops.Repo, issue
 
 	prompt := fmt.Sprintf(ImplementPrompt, issueContext, plan)
 
+	// Inject repo memory from previous work on this repository.
+	if d.memoryStore != nil {
+		if memCtx := d.memoryStore.FormatForPrompt(); memCtx != "" {
+			prompt += "\n\n" + memCtx
+		}
+	}
+
 	// Inject codebase structure so Claude doesn't waste iterations discovering it.
 	if repoContext != "" {
 		prompt += "\n\n" + repoContext
@@ -812,8 +827,17 @@ func (d *DeveloperAgent) implement(ctx context.Context, repo *gitops.Repo, issue
 		prompt += "\n\n" + preRead
 	}
 
-	_, err := conv.Send(ctx, prompt)
-	return err
+	response, err := conv.Send(ctx, prompt)
+	if err != nil {
+		return err
+	}
+
+	// Extract learnings from successful implementation
+	if d.memoryStore != nil && d.Deps.Config.Memory.ExtractOnComplete {
+		d.extractMemories(ctx, response, issueContext)
+	}
+
+	return nil
 }
 
 func (d *DeveloperAgent) createToolExecutor(repo *gitops.Repo) claude.ToolExecutor {
@@ -862,6 +886,37 @@ func (d *DeveloperAgent) createToolExecutor(repo *gitops.Repo) claude.ToolExecut
 		default:
 			return "", fmt.Errorf("unknown tool: %s", name)
 		}
+	}
+}
+
+// extractMemories asks Claude to extract learnings and stores them in the memory store.
+func (d *DeveloperAgent) extractMemories(ctx context.Context, implementResponse, issueContext string) {
+	conv := claude.NewConversation(
+		d.Deps.Claude,
+		"You are a memory extraction assistant. Extract reusable learnings from completed work.",
+		nil, nil,
+		d.Deps.Logger,
+		0,
+	)
+
+	prompt := fmt.Sprintf("The following implementation was completed successfully.\n\n## Issue\n%s\n\n## Implementation Summary\n%s\n%s",
+		issueContext, implementResponse, memory.ExtractionPrompt)
+
+	response, err := conv.Send(ctx, prompt)
+	if err != nil {
+		d.logger().Debug("failed to extract memories", "error", err)
+		return
+	}
+
+	entries := memory.ParseExtractedMemories(response, fmt.Sprintf("issue-%s", issueContext[:min(50, len(issueContext))]), d.Deps.Logger)
+	for _, entry := range entries {
+		if err := d.memoryStore.Add(entry); err != nil {
+			d.logger().Debug("failed to store memory", "error", err)
+		}
+	}
+
+	if len(entries) > 0 {
+		d.logger().Info("extracted repo memories", "count", len(entries))
 	}
 }
 

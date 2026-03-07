@@ -89,7 +89,7 @@ func TestCreativityEngine_ExitsWhenWorkAvailable(t *testing.T) {
 	}
 
 	ai := &mockAI{suggestion: &Suggestion{Title: "test", Body: "test"}}
-	engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+	engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 	err := engine.Run(context.Background())
 	require.NoError(t, err)
@@ -110,7 +110,7 @@ func TestCreativityEngine_SkipsWhenPendingSuggestionExists(t *testing.T) {
 	}
 
 	ai := &mockAI{suggestion: &Suggestion{Title: "test", Body: "test"}}
-	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 	err := engine.Run(context.Background())
 	require.NoError(t, err)
@@ -142,7 +142,7 @@ func TestCreativityEngine_CreatesSuggestionWhenIdle(t *testing.T) {
 		},
 	}
 
-	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 	err := engine.Run(context.Background())
 	require.NoError(t, err)
 
@@ -183,7 +183,7 @@ func TestCreativityEngine_SkipsDuplicateSuggestion(t *testing.T) {
 		},
 	}
 
-	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 	err := engine.Run(context.Background())
 	require.NoError(t, err)
 	assert.Empty(t, gh.createdIssues, "should skip duplicate suggestion")
@@ -221,7 +221,7 @@ func TestCreativityEngine_SkipsRejectedSuggestion(t *testing.T) {
 		},
 	}
 
-	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 	err := engine.Run(context.Background())
 	require.NoError(t, err)
 	assert.Empty(t, gh.createdIssues, "should skip rejected suggestion")
@@ -234,7 +234,7 @@ func TestCreativityEngine_DisabledByConfig(t *testing.T) {
 	gh := newMockGitHub()
 	ai := &mockAI{}
 
-	engine := NewCreativityEngine(gh, ai, cfg, RepoConfig{}, "test-agent", testLogger())
+	engine := NewCreativityEngine(gh, ai, cfg, RepoConfig{}, "test-agent", testLogger(), nil)
 	assert.NotNil(t, engine)
 	// When disabled, the engine is simply never called by the poller.
 	// We verify the engine can be constructed even with disabled config.
@@ -267,7 +267,7 @@ func TestCreativityEngine_ContextIncludesClosedIssues(t *testing.T) {
 		capturePrompt: &capturedPrompt,
 	}
 
-	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 	err := engine.Run(context.Background())
 	require.NoError(t, err)
 	assert.Contains(t, capturedPrompt, "Implemented feature X")
@@ -298,7 +298,7 @@ func TestCreativityEngine_RepoCloneFailureGraceful(t *testing.T) {
 		Token:        "fake-token",
 		WorkspaceDir: t.TempDir(),
 	}
-	engine := NewCreativityEngine(counterGH, ai, testConfig(), repoCfg, "test-agent", testLogger())
+	engine := NewCreativityEngine(counterGH, ai, testConfig(), repoCfg, "test-agent", testLogger(), nil)
 
 	err := engine.Run(context.Background())
 	require.NoError(t, err)
@@ -328,7 +328,7 @@ func TestCreativityEngine_AIError(t *testing.T) {
 	}
 
 	ai := &mockAI{err: fmt.Errorf("API error")}
-	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+	engine := NewCreativityEngine(counterGH, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 	err := engine.Run(context.Background())
 	require.NoError(t, err)
@@ -470,7 +470,7 @@ func TestCreativityEngine_CheckForAvailableWork(t *testing.T) {
 	t.Run("no work available", func(t *testing.T) {
 		gh := newMockGitHub()
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		hasWork, err := engine.checkForAvailableWork(context.Background())
 		require.NoError(t, err)
@@ -481,7 +481,7 @@ func TestCreativityEngine_CheckForAvailableWork(t *testing.T) {
 		gh := newMockGitHub()
 		gh.issuesByLabel[labelReady] = []*Issue{{Number: 1, Title: "Work"}}
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		hasWork, err := engine.checkForAvailableWork(context.Background())
 		require.NoError(t, err)
@@ -491,7 +491,7 @@ func TestCreativityEngine_CheckForAvailableWork(t *testing.T) {
 	t.Run("error checking work", func(t *testing.T) {
 		gh := &errorMockGitHub{err: fmt.Errorf("network error")}
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		_, err := engine.checkForAvailableWork(context.Background())
 		assert.Error(t, err)
@@ -503,7 +503,7 @@ func TestCreativityEngine_HasPendingSuggestion(t *testing.T) {
 	t.Run("no pending suggestions", func(t *testing.T) {
 		gh := newMockGitHub()
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		pending, err := engine.hasPendingSuggestion(context.Background())
 		require.NoError(t, err)
@@ -516,7 +516,7 @@ func TestCreativityEngine_HasPendingSuggestion(t *testing.T) {
 		ai := &mockAI{}
 		cfg := testConfig()
 		cfg.MaxPendingSuggestions = 1
-		engine := NewCreativityEngine(gh, ai, cfg, RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, cfg, RepoConfig{}, "test-agent", testLogger(), nil)
 
 		pending, err := engine.hasPendingSuggestion(context.Background())
 		require.NoError(t, err)
@@ -526,7 +526,7 @@ func TestCreativityEngine_HasPendingSuggestion(t *testing.T) {
 	t.Run("error checking pending", func(t *testing.T) {
 		gh := &errorMockGitHub{err: fmt.Errorf("network error")}
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		_, err := engine.hasPendingSuggestion(context.Background())
 		assert.Error(t, err)
@@ -538,7 +538,7 @@ func TestCreativityEngine_IsDuplicate(t *testing.T) {
 	t.Run("matches pending idea", func(t *testing.T) {
 		gh := newMockGitHub()
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		projectCtx := &ProjectContext{
 			PendingIdeas: []*Issue{{Number: 1, Title: "Add logging"}},
@@ -550,7 +550,7 @@ func TestCreativityEngine_IsDuplicate(t *testing.T) {
 	t.Run("matches open issue", func(t *testing.T) {
 		gh := newMockGitHub()
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		projectCtx := &ProjectContext{
 			OpenIssues: []*Issue{{Number: 1, Title: "Improve error handling"}},
@@ -562,7 +562,7 @@ func TestCreativityEngine_IsDuplicate(t *testing.T) {
 	t.Run("matches rejection cache", func(t *testing.T) {
 		gh := newMockGitHub()
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 		engine.rejectionCache.Add("Add caching layer")
 
 		projectCtx := &ProjectContext{}
@@ -572,7 +572,7 @@ func TestCreativityEngine_IsDuplicate(t *testing.T) {
 	t.Run("no match", func(t *testing.T) {
 		gh := newMockGitHub()
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		projectCtx := &ProjectContext{
 			PendingIdeas: []*Issue{{Number: 1, Title: "Add logging"}},
@@ -587,7 +587,7 @@ func TestCreativityEngine_CreateSuggestionIssue(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		gh := newMockGitHub()
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		err := engine.createSuggestionIssue(context.Background(), &Suggestion{
 			Title: "Test suggestion",
@@ -606,7 +606,7 @@ func TestCreativityEngine_CreateSuggestionIssue(t *testing.T) {
 		gh := newMockGitHub()
 		gh.createErr = fmt.Errorf("API error")
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		err := engine.createSuggestionIssue(context.Background(), &Suggestion{
 			Title: "Test",
@@ -621,7 +621,7 @@ func TestCreativityEngine_GenerateSuggestion(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		gh := newMockGitHub()
 		ai := &mockAI{suggestion: &Suggestion{Title: "Test", Body: "Body"}}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		suggestion, err := engine.generateSuggestion(context.Background(), &ProjectContext{})
 		require.NoError(t, err)
@@ -631,7 +631,7 @@ func TestCreativityEngine_GenerateSuggestion(t *testing.T) {
 	t.Run("AI error", func(t *testing.T) {
 		gh := newMockGitHub()
 		ai := &mockAI{err: fmt.Errorf("AI error")}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		_, err := engine.generateSuggestion(context.Background(), &ProjectContext{})
 		assert.Error(t, err)
@@ -643,7 +643,7 @@ func TestCreativityEngine_Sleep(t *testing.T) {
 	t.Run("sleeps for duration", func(t *testing.T) {
 		gh := newMockGitHub()
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		err := engine.sleep(context.Background(), 10*time.Millisecond)
 		assert.NoError(t, err)
@@ -652,7 +652,7 @@ func TestCreativityEngine_Sleep(t *testing.T) {
 	t.Run("cancelled context", func(t *testing.T) {
 		gh := newMockGitHub()
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
@@ -671,7 +671,7 @@ func TestCreativityEngine_LoadRejectionHistory(t *testing.T) {
 			{Number: 2, Title: "Rejected idea 2"},
 		}
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		err := engine.loadRejectionHistory(context.Background())
 		require.NoError(t, err)
@@ -683,7 +683,7 @@ func TestCreativityEngine_LoadRejectionHistory(t *testing.T) {
 	t.Run("error loading rejection history", func(t *testing.T) {
 		gh := &errorMockGitHub{err: fmt.Errorf("API error")}
 		ai := &mockAI{}
-		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+		engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 		err := engine.loadRejectionHistory(context.Background())
 		assert.Error(t, err)
@@ -694,7 +694,7 @@ func TestCreativityEngine_LoadRejectionHistory(t *testing.T) {
 func TestCreativityEngine_RunContextCancelled(t *testing.T) {
 	gh := newMockGitHub()
 	ai := &mockAI{}
-	engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger())
+	engine := NewCreativityEngine(gh, ai, testConfig(), RepoConfig{}, "test-agent", testLogger(), nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately

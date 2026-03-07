@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"time"
 
 	"github.com/gaskaj/OpenAgentFramework/internal/agent"
 	"github.com/gaskaj/OpenAgentFramework/internal/creativity"
 	"github.com/gaskaj/OpenAgentFramework/internal/ghub"
+	"github.com/gaskaj/OpenAgentFramework/internal/memory"
 	"github.com/gaskaj/OpenAgentFramework/internal/observability"
 	"github.com/gaskaj/OpenAgentFramework/internal/state"
 	"github.com/gaskaj/OpenAgentFramework/internal/workspace"
@@ -23,6 +25,7 @@ type DeveloperAgent struct {
 	workspaceManager workspace.Manager
 	validator        *state.StateValidator
 	recoveryManager  *RecoveryManager
+	memoryStore      *memory.Store
 }
 
 // New creates a new DeveloperAgent.
@@ -78,9 +81,23 @@ func New(deps agent.Dependencies) (agent.Agent, error) {
 		return nil, fmt.Errorf("creating workspace manager: %w", err)
 	}
 
+	// Initialize repo memory store if enabled
+	var memStore *memory.Store
+	if deps.Config.Memory.Enabled {
+		memoryDir := filepath.Join(repoWorkspaceDir, ".memory")
+		var memErr error
+		memStore, memErr = memory.NewStore(memoryDir)
+		if memErr != nil {
+			deps.Logger.Warn("failed to initialize memory store, continuing without memory", "error", memErr)
+		} else {
+			deps.Logger.Info("repo memory initialized", "dir", memoryDir, "entries", memStore.Count())
+		}
+	}
+
 	da := &DeveloperAgent{
 		BaseAgent:        agent.NewBaseAgent(deps),
 		workspaceManager: workspaceManager,
+		memoryStore:      memStore,
 		status: agent.StatusReport{
 			Type:    agent.TypeDeveloper,
 			State:   string(state.StateIdle),
@@ -112,6 +129,7 @@ func New(deps agent.Dependencies) (agent.Agent, error) {
 			repoCfg,
 			string(agent.TypeDeveloper),
 			deps.Logger.With("component", "creativity"),
+			memStore,
 		)
 
 		da.poller.IdleHandler = func(ctx context.Context) error {

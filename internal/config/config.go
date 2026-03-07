@@ -26,6 +26,15 @@ type Config struct {
 	Shutdown      ShutdownConfig      `mapstructure:"shutdown"`
 	Workspace     WorkspaceConfig     `mapstructure:"workspace"`
 	ControlPlane  ControlPlaneConfig  `mapstructure:"controlplane"`
+	Memory        MemoryConfig        `mapstructure:"memory"`
+}
+
+// MemoryConfig holds configuration for the repository memory system.
+type MemoryConfig struct {
+	Enabled         bool `mapstructure:"enabled"`
+	MaxEntries      int  `mapstructure:"max_entries"`
+	MaxPromptSize   int  `mapstructure:"max_prompt_size"`
+	ExtractOnComplete bool `mapstructure:"extract_on_complete"`
 }
 
 // ControlPlaneConfig holds configuration for reporting to the WebUI control plane.

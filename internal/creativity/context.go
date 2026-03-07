@@ -24,6 +24,7 @@ type ProjectContext struct {
 	PendingIdeas  []*Issue
 	RepoStructure string
 	KeyDocs       map[string]string // path → content
+	RepoMemory    string            // formatted memory from previous work
 }
 
 // gatherContext fetches project context from GitHub issues and the repository.
@@ -62,6 +63,12 @@ func (e *CreativityEngine) gatherContext(ctx context.Context) (*ProjectContext, 
 		}
 	}
 
+	// Inject repo memory if available
+	var repoMemory string
+	if e.memoryStore != nil {
+		repoMemory = e.memoryStore.FormatForPrompt()
+	}
+
 	return &ProjectContext{
 		OpenIssues:    openIssues,
 		ClosedIssues:  closedIssues,
@@ -69,6 +76,7 @@ func (e *CreativityEngine) gatherContext(ctx context.Context) (*ProjectContext, 
 		PendingIdeas:  pendingIdeas,
 		RepoStructure: repoStructure,
 		KeyDocs:       keyDocs,
+		RepoMemory:    repoMemory,
 	}, nil
 }
 
@@ -152,6 +160,12 @@ func buildPrompt(projectCtx *ProjectContext) string {
 	b.WriteString("4. **Closed Issues** — Understand what has already been implemented, fixed, or completed\n")
 	b.WriteString("5. **Pending Suggestions** — See what improvements have already been proposed\n")
 	b.WriteString("6. **Rejected Ideas** — Avoid suggesting anything that was previously rejected\n\n")
+
+	// Repo memory from previous work.
+	if projectCtx.RepoMemory != "" {
+		b.WriteString(projectCtx.RepoMemory)
+		b.WriteString("\n")
+	}
 
 	// Repository structure.
 	if projectCtx.RepoStructure != "" {

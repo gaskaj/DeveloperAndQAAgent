@@ -10,6 +10,7 @@ import (
 
 	"github.com/gaskaj/OpenAgentFramework/internal/config"
 	"github.com/gaskaj/OpenAgentFramework/internal/gitops"
+	"github.com/gaskaj/OpenAgentFramework/internal/memory"
 )
 
 // RepoConfig holds configuration for the creativity engine's repo awareness.
@@ -29,10 +30,11 @@ type CreativityEngine struct {
 	rejectionCache *RejectionCache
 	agentID        string
 	logger         *slog.Logger
+	memoryStore    *memory.Store
 }
 
 // NewCreativityEngine creates a new CreativityEngine.
-func NewCreativityEngine(gh GitHubClient, ai AIClient, cfg config.CreativityConfig, repoCfg RepoConfig, agentID string, logger *slog.Logger) *CreativityEngine {
+func NewCreativityEngine(gh GitHubClient, ai AIClient, cfg config.CreativityConfig, repoCfg RepoConfig, agentID string, logger *slog.Logger, memStore *memory.Store) *CreativityEngine {
 	return &CreativityEngine{
 		gh:             gh,
 		ai:             ai,
@@ -41,6 +43,7 @@ func NewCreativityEngine(gh GitHubClient, ai AIClient, cfg config.CreativityConf
 		rejectionCache: NewRejectionCache(cfg.MaxRejectionHistory),
 		agentID:        agentID,
 		logger:         logger,
+		memoryStore:    memStore,
 	}
 }
 

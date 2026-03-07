@@ -481,4 +481,12 @@ func ApplyDefaults(cfg *Config) {
 	if cfg.Shutdown.Timeout == 0 {
 		cfg.Shutdown.Timeout = defaults.Shutdown.Timeout
 	}
+
+	// Memory defaults
+	if cfg.Memory.MaxEntries == 0 {
+		cfg.Memory.MaxEntries = 100
+	}
+	if cfg.Memory.MaxPromptSize == 0 {
+		cfg.Memory.MaxPromptSize = 8000
+	}
 }
