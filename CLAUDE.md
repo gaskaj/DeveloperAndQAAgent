@@ -149,6 +149,7 @@ Key sections: `github`, `claude`, `agents`, `state`, `logging`, `creativity`, `d
 - [docs/configuration/configuration.md](docs/configuration/configuration.md) — Full YAML reference, env vars, defaults, validation
 - [docs/observability/structured-logging.md](docs/observability/structured-logging.md) — Observability, correlation IDs, metrics
 - [docs/testing/integration-testing.md](docs/testing/integration-testing.md) — Integration test suite, mock infrastructure, CI pipeline
+- [docs/webui/webui-pages.md](docs/webui/webui-pages.md) — All WebUI pages with screenshots, features, and usage
 - [docs/webui/webui-architecture.md](docs/webui/webui-architecture.md) — Control plane WebUI architecture, multi-tenant design
 - [docs/webui/webui-api-reference.md](docs/webui/webui-api-reference.md) — REST API endpoints for the control plane
 - [docs/webui/webui-deployment.md](docs/webui/webui-deployment.md) — Docker Compose deployment, configuration
@@ -194,3 +195,14 @@ When modifying UI components or API endpoints:
 - Reference other documentation and/or code with file references
 - Avoid duplicating code in the instructions and reference the files the documentation is describing
 - Documentation MUST be added with the Issue and PR of the new feature
+
+### WebUI Documentation Requirements
+
+**MANDATORY**: Any change to the WebUI (new pages, modified pages, new features, changed layouts) MUST update the WebUI documentation:
+
+1. **Update `docs/webui/webui-pages.md`** — Add or modify the page description, features list, and usage instructions for any changed or new page
+2. **Regenerate screenshots** — Run `cd frontend && npx playwright test e2e/screenshots.spec.ts` to capture updated screenshots after UI changes. If adding a new page, add a screenshot step to `frontend/e2e/screenshots.spec.ts`
+3. **Update `docs/webui/webui-api-reference.md`** if new API endpoints are added or existing ones change
+4. **Update `docs/webui/webui-architecture.md`** if architectural patterns change (new stores, hooks, components)
+
+Screenshots are stored in `docs/webui/screenshots/` and referenced from `docs/webui/webui-pages.md`. The Playwright screenshot test at `frontend/e2e/screenshots.spec.ts` automates capture against the running stack (`docker compose up`).
