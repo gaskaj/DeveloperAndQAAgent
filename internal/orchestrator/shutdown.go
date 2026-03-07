@@ -205,7 +205,8 @@ func (sm *ShutdownManager) cleanupWorkspaces(ctx context.Context) error {
 		return nil
 	}
 
-	workspaceDir := sm.config.Agents.Developer.WorkspaceDir
+	// Use repo-specific workspace path to match where agent creates workspaces
+	workspaceDir := sm.config.GetWorkspacePath(sm.config.Agents.Developer.WorkspaceDir)
 	sm.logger.Info("cleaning workspace directories", "dir", workspaceDir)
 
 	// Check if workspace directory exists
