@@ -70,8 +70,12 @@ func New(
 	invitationHandler := handler.NewInvitationHandler(stores.Invitations, stores.Orgs, stores.Users, logger)
 	auditHandler := handler.NewAuditHandler(stores.AuditLogs, logger)
 	wsHandler := handler.NewWSHandler(hub, jwtMgr, logger)
+	openAPIHandler := handler.NewOpenAPIHandler()
 
 	r.Route("/api/v1", func(r chi.Router) {
+		// OpenAPI specification (public)
+		r.Get("/openapi.json", openAPIHandler.HandleSpec)
+
 		// Health check
 		r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 			if err := stores.Ping(r.Context()); err != nil {

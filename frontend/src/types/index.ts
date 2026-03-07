@@ -69,7 +69,7 @@ export interface Agent {
   tags: string[];
   config_snapshot: Record<string, unknown>;
   last_heartbeat: string;
-  registered_at: string;
+  created_at: string;
   updated_at: string;
 }
 

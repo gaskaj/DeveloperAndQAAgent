@@ -1,7 +1,8 @@
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, AxiosResponse } from 'axios';
 import type { ApiError } from '@/types';
 import { useAuthStore } from '@/store/auth-store';
 import { CURRENT_API_VERSION, createVersionHeaders, parseVersionResponse, VersionResponse } from './versions';
+import { validateApiResponse } from './validation';
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
@@ -22,7 +23,7 @@ apiClient.interceptors.request.use((config) => {
 
 // Handle 401 responses: attempt token refresh or redirect to login
 apiClient.interceptors.response.use(
-  (response) => {
+  (response: AxiosResponse) => {
     // Parse version information from response headers
     const versionInfo: VersionResponse = parseVersionResponse(response.headers);
     
@@ -33,6 +34,16 @@ apiClient.interceptors.response.use(
         versionInfo.sunsetDate ? `Sunset date: ${versionInfo.sunsetDate}` : '',
         versionInfo.migrationGuide ? `Migration guide: ${versionInfo.migrationGuide}` : '',
       );
+    }
+
+    // Validate API response against expected schema in development
+    if (import.meta.env.DEV) {
+      try {
+        validateApiResponse(response);
+      } catch (validationError) {
+        console.error('API contract validation failed:', validationError);
+        // Don't fail the request in development, just log
+      }
     }
     
     return response;

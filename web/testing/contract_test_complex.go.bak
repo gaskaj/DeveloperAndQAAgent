@@ -1,0 +1,470 @@
+package testing
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/gaskaj/OpenAgentFramework/web/auth"
+	"github.com/gaskaj/OpenAgentFramework/web/config"
+	"github.com/gaskaj/OpenAgentFramework/web/handler"
+	"github.com/gaskaj/OpenAgentFramework/web/router"
+	"github.com/gaskaj/OpenAgentFramework/web/store"
+	"github.com/gaskaj/OpenAgentFramework/web/ws"
+)
+
+// ContractTestSuite provides comprehensive API contract testing
+type ContractTestSuite struct {
+	t      *testing.T
+	server *httptest.Server
+	spec   map[string]interface{}
+	jwtMgr *auth.JWTManager
+	stores *store.PostgresStore
+	hub    *ws.Hub
+}
+
+// NewContractTestSuite creates a new contract test suite
+func NewContractTestSuite(t *testing.T) *ContractTestSuite {
+	// Create test stores (mock implementations for contract testing)
+	stores := &store.PostgresStore{
+		Users:       store.NewMemoryUserStore(),
+		Orgs:        store.NewMemoryOrgStore(),
+		Agents:      store.NewMemoryAgentStore(),
+		Events:      store.NewMemoryEventStore(),
+		APIKeys:     store.NewMemoryAPIKeyStore(),
+		Invitations: store.NewMemoryInvitationStore(),
+		AuditLogs:   store.NewMemoryAuditStore(),
+	}
+
+	// Create JWT manager for testing
+	jwtMgr, err := auth.NewJWTManager("test-secret-key", time.Hour, time.Hour*24)
+	require.NoError(t, err)
+
+	// Create WebSocket hub
+	hub := ws.NewHub()
+	go hub.Run()
+
+	// Create auth handler
+	authHandler := handler.NewAuthHandler(
+		stores.Users.(*store.MemoryUserStore),
+		stores.Orgs.(*store.MemoryOrgStore),
+		jwtMgr,
+		4, // bcrypt cost for testing
+		nil, // logger
+	)
+
+	// Create test router
+	versionConfig := config.VersionConfig{
+		DefaultVersion:     "1.0",
+		DeprecationWarning: true,
+		SupportedVersions: []config.APIVersion{
+			{Version: "1.0", IsDefault: true},
+		},
+	}
+
+	testRouter := router.New(
+		stores,
+		jwtMgr,
+		hub,
+		authHandler,
+		versionConfig,
+		nil, // logger
+		[]string{"*"}, // allowed origins
+	)
+
+	server := httptest.NewServer(testRouter)
+
+	// Load OpenAPI spec
+	openAPIHandler := handler.NewOpenAPIHandler()
+	spec := openAPIHandler.GetSpec()
+
+	return &ContractTestSuite{
+		t:      t,
+		server: server,
+		spec:   spec,
+		jwtMgr: jwtMgr,
+		stores: stores,
+		hub:    hub,
+	}
+}
+
+// Close cleans up the test suite
+func (suite *ContractTestSuite) Close() {
+	suite.server.Close()
+	suite.hub.Close()
+}
+
+// TestEndpointContract validates a specific endpoint against the OpenAPI contract
+func (suite *ContractTestSuite) TestEndpointContract(method, path string, body interface{}, headers map[string]string, expectedStatus int) *http.Response {
+	// Prepare request body
+	var requestBody []byte
+	if body != nil {
+		var err error
+		requestBody, err = json.Marshal(body)
+		require.NoError(suite.t, err)
+	}
+
+	// Create request
+	req, err := http.NewRequest(method, suite.server.URL+path, bytes.NewBuffer(requestBody))
+	require.NoError(suite.t, err)
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
+	// Execute request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(suite.t, err)
+
+	// Validate response status
+	assert.Equal(suite.t, expectedStatus, resp.StatusCode, "Response status mismatch for %s %s", method, path)
+
+	// Basic validation (simplified for now)
+	suite.validateBasicContract(req, resp)
+
+	return resp
+}
+
+// validateBasicContract provides basic contract validation
+func (suite *ContractTestSuite) validateBasicContract(req *http.Request, resp *http.Response) {
+	// Basic validation - ensure response is JSON and has expected structure
+	if resp.Header.Get("Content-Type") != "" && resp.Header.Get("Content-Type") != "application/json" {
+		suite.t.Logf("Warning: Expected JSON response for %s %s, got %s", req.Method, req.URL.Path, resp.Header.Get("Content-Type"))
+	}
+
+	// For successful responses, ensure basic structure is valid JSON
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		decoder := json.NewDecoder(resp.Body)
+		var data interface{}
+		if err := decoder.Decode(&data); err != nil {
+			suite.t.Errorf("Response body is not valid JSON for %s %s: %v", req.Method, req.URL.Path, err)
+		}
+	}
+}
+
+// createAuthHeaders creates authentication headers for testing
+func (suite *ContractTestSuite) createAuthHeaders(userID uuid.UUID, email string, orgs []auth.OrgClaim) map[string]string {
+	token, err := suite.jwtMgr.CreateAccessToken(userID, email, orgs)
+	require.NoError(suite.t, err)
+
+	return map[string]string{
+		"Authorization": "Bearer " + token,
+	}
+}
+
+// createAPIKeyHeaders creates API key authentication headers
+func (suite *ContractTestSuite) createAPIKeyHeaders(apiKey string) map[string]string {
+	return map[string]string{
+		"Authorization": "Bearer " + apiKey,
+	}
+}
+
+// Test contract compliance for all major endpoints
+func TestAPIContractCompliance(t *testing.T) {
+	suite := NewContractTestSuite(t)
+	defer suite.Close()
+
+	// Test health endpoint
+	t.Run("Health Check", func(t *testing.T) {
+		suite.TestEndpointContract("GET", "/api/v1/healthz", nil, nil, http.StatusOK)
+	})
+
+	// Test OpenAPI spec endpoint
+	t.Run("OpenAPI Specification", func(t *testing.T) {
+		resp := suite.TestEndpointContract("GET", "/api/v1/openapi.json", nil, nil, http.StatusOK)
+		
+		// Verify it's valid JSON
+		var spec map[string]interface{}
+		decoder := json.NewDecoder(resp.Body)
+		err := decoder.Decode(&spec)
+		assert.NoError(t, err)
+		
+		// Verify it has required OpenAPI fields
+		assert.Equal(t, "3.0.3", spec["openapi"])
+		assert.NotNil(t, spec["info"])
+		assert.NotNil(t, spec["paths"])
+		assert.NotNil(t, spec["components"])
+	})
+
+	// Test authentication endpoints
+	t.Run("Authentication", func(t *testing.T) {
+		// Test user registration
+		registerReq := map[string]interface{}{
+			"email":        "test@example.com",
+			"password":     "testpass123",
+			"display_name": "Test User",
+			"org_name":     "Test Org",
+		}
+		resp := suite.TestEndpointContract("POST", "/api/v1/auth/register", registerReq, nil, http.StatusCreated)
+		
+		// Decode response to verify structure
+		var registerResp map[string]interface{}
+		decoder := json.NewDecoder(resp.Body)
+		err := decoder.Decode(&registerResp)
+		assert.NoError(t, err)
+		assert.NotNil(t, registerResp["user"])
+		assert.NotNil(t, registerResp["access_token"])
+		assert.NotNil(t, registerResp["refresh_token"])
+
+		// Test user login
+		loginReq := map[string]interface{}{
+			"email":    "test@example.com",
+			"password": "testpass123",
+		}
+		suite.TestEndpointContract("POST", "/api/v1/auth/login", loginReq, nil, http.StatusOK)
+
+		// Test invalid login
+		invalidLoginReq := map[string]interface{}{
+			"email":    "test@example.com",
+			"password": "wrongpassword",
+		}
+		suite.TestEndpointContract("POST", "/api/v1/auth/login", invalidLoginReq, nil, http.StatusUnauthorized)
+	})
+
+	// Test agent endpoints with authentication
+	t.Run("Agent Management", func(t *testing.T) {
+		// Create test user and org
+		userID := uuid.New()
+		orgID := uuid.New()
+		orgClaims := []auth.OrgClaim{{ID: orgID, Slug: "test-org", Role: "owner"}}
+		authHeaders := suite.createAuthHeaders(userID, "test@example.com", orgClaims)
+
+		// Test agent registration
+		agentReq := map[string]interface{}{
+			"name":         "Test Agent",
+			"agent_type":   "developer",
+			"description":  "A test agent",
+			"github_owner": "testowner",
+			"github_repo":  "testrepo",
+			"tags":         []string{"test", "demo"},
+		}
+		suite.TestEndpointContract("POST", "/api/v1/orgs/test-org/agents", agentReq, authHeaders, http.StatusCreated)
+
+		// Test listing agents
+		suite.TestEndpointContract("GET", "/api/v1/orgs/test-org/agents", nil, authHeaders, http.StatusOK)
+
+		// Test listing agents with pagination
+		suite.TestEndpointContract("GET", "/api/v1/orgs/test-org/agents?limit=10&offset=0", nil, authHeaders, http.StatusOK)
+
+		// Test agent access without authentication
+		suite.TestEndpointContract("GET", "/api/v1/orgs/test-org/agents", nil, nil, http.StatusUnauthorized)
+	})
+
+	// Test API versioning compliance
+	t.Run("API Versioning", func(t *testing.T) {
+		headers := map[string]string{
+			"API-Version": "1.0",
+		}
+		resp := suite.TestEndpointContract("GET", "/api/v1/healthz", nil, headers, http.StatusOK)
+		
+		// Verify version headers are present
+		assert.Equal(t, "1.0", resp.Header.Get("API-Version"))
+	})
+
+	// Test error response compliance
+	t.Run("Error Response Structure", func(t *testing.T) {
+		// Test 404 error
+		resp := suite.TestEndpointContract("GET", "/api/v1/nonexistent", nil, nil, http.StatusNotFound)
+		
+		// Decode error response
+		var errorResp map[string]interface{}
+		decoder := json.NewDecoder(resp.Body)
+		err := decoder.Decode(&errorResp)
+		assert.NoError(t, err)
+		
+		// Verify error structure (this should match ApiError schema)
+		assert.NotNil(t, errorResp["error"])
+		assert.NotNil(t, errorResp["message"])
+		assert.NotNil(t, errorResp["status"])
+	})
+}
+
+// TestSchemaValidation tests that all response schemas match TypeScript interfaces
+func TestSchemaValidation(t *testing.T) {
+	suite := NewContractTestSuite(t)
+	defer suite.Close()
+
+	t.Run("User Schema Validation", func(t *testing.T) {
+		// Register a user and validate the response schema
+		registerReq := map[string]interface{}{
+			"email":        "schema-test@example.com",
+			"password":     "testpass123",
+			"display_name": "Schema Test User",
+		}
+		resp := suite.TestEndpointContract("POST", "/api/v1/auth/register", registerReq, nil, http.StatusCreated)
+		
+		var response map[string]interface{}
+		decoder := json.NewDecoder(resp.Body)
+		err := decoder.Decode(&response)
+		require.NoError(t, err)
+
+		user := response["user"].(map[string]interface{})
+		
+		// Validate all required fields are present
+		assert.NotNil(t, user["id"])
+		assert.Equal(t, "schema-test@example.com", user["email"])
+		assert.Equal(t, "Schema Test User", user["display_name"])
+		assert.NotNil(t, user["created_at"])
+		assert.NotNil(t, user["updated_at"])
+
+		// Validate field types
+		assert.IsType(t, "", user["id"])
+		assert.IsType(t, "", user["email"])
+		assert.IsType(t, "", user["display_name"])
+		assert.IsType(t, "", user["created_at"])
+		assert.IsType(t, "", user["updated_at"])
+	})
+
+	t.Run("Agent Schema Validation", func(t *testing.T) {
+		// Create authenticated context
+		userID := uuid.New()
+		orgID := uuid.New()
+		orgClaims := []auth.OrgClaim{{ID: orgID, Slug: "schema-test-org", Role: "owner"}}
+		authHeaders := suite.createAuthHeaders(userID, "schema-test@example.com", orgClaims)
+
+		// Register an agent
+		agentReq := map[string]interface{}{
+			"name":        "Schema Test Agent",
+			"agent_type":  "developer",
+			"description": "Agent for schema validation",
+			"tags":        []string{"test"},
+		}
+		resp := suite.TestEndpointContract("POST", "/api/v1/orgs/schema-test-org/agents", agentReq, authHeaders, http.StatusCreated)
+		
+		var response map[string]interface{}
+		decoder := json.NewDecoder(resp.Body)
+		err := decoder.Decode(&response)
+		require.NoError(t, err)
+
+		agent := response["data"].(map[string]interface{})
+		
+		// Validate required fields
+		assert.NotNil(t, agent["id"])
+		assert.NotNil(t, agent["org_id"])
+		assert.Equal(t, "Schema Test Agent", agent["name"])
+		assert.Equal(t, "developer", agent["agent_type"])
+		assert.Equal(t, "registered", agent["status"])
+		assert.NotNil(t, agent["created_at"])
+		assert.NotNil(t, agent["updated_at"])
+
+		// Validate tags array
+		tags := agent["tags"].([]interface{})
+		assert.Equal(t, 1, len(tags))
+		assert.Equal(t, "test", tags[0])
+	})
+}
+
+// TestVersioningCompliance tests API versioning behavior
+func TestVersioningCompliance(t *testing.T) {
+	suite := NewContractTestSuite(t)
+	defer suite.Close()
+
+	t.Run("Supported Version Headers", func(t *testing.T) {
+		headers := map[string]string{
+			"API-Version": "1.0",
+		}
+		resp := suite.TestEndpointContract("GET", "/api/v1/healthz", nil, headers, http.StatusOK)
+		
+		// Should echo back the requested version
+		assert.Equal(t, "1.0", resp.Header.Get("API-Version"))
+		
+		// Should not have deprecation headers for current version
+		assert.Empty(t, resp.Header.Get("Deprecation"))
+		assert.Empty(t, resp.Header.Get("Sunset"))
+	})
+
+	t.Run("Default Version Behavior", func(t *testing.T) {
+		resp := suite.TestEndpointContract("GET", "/api/v1/healthz", nil, nil, http.StatusOK)
+		
+		// Should return default version header
+		assert.Equal(t, "1.0", resp.Header.Get("API-Version"))
+	})
+
+	t.Run("Unsupported Version", func(t *testing.T) {
+		headers := map[string]string{
+			"API-Version": "999.0",
+		}
+		suite.TestEndpointContract("GET", "/api/v1/healthz", nil, headers, http.StatusBadRequest)
+	})
+}
+
+// TestAuthenticationScenarios tests various authentication flows
+func TestAuthenticationScenarios(t *testing.T) {
+	suite := NewContractTestSuite(t)
+	defer suite.Close()
+
+	t.Run("JWT Authentication Flow", func(t *testing.T) {
+		userID := uuid.New()
+		orgClaims := []auth.OrgClaim{{ID: uuid.New(), Slug: "auth-test-org", Role: "member"}}
+		
+		// Valid token
+		authHeaders := suite.createAuthHeaders(userID, "auth-test@example.com", orgClaims)
+		suite.TestEndpointContract("GET", "/api/v1/orgs/auth-test-org/agents", nil, authHeaders, http.StatusOK)
+		
+		// Invalid token
+		invalidHeaders := map[string]string{
+			"Authorization": "Bearer invalid-token",
+		}
+		suite.TestEndpointContract("GET", "/api/v1/orgs/auth-test-org/agents", nil, invalidHeaders, http.StatusUnauthorized)
+		
+		// Missing token
+		suite.TestEndpointContract("GET", "/api/v1/orgs/auth-test-org/agents", nil, nil, http.StatusUnauthorized)
+	})
+
+	t.Run("API Key Authentication Flow", func(t *testing.T) {
+		// Valid API key for ingestion endpoint
+		apiKeyHeaders := suite.createAPIKeyHeaders("test-api-key-123")
+		
+		// This would normally work with a valid API key in the database
+		// For now, test the authentication mechanism
+		suite.TestEndpointContract("POST", "/api/v1/ingest/events", map[string]interface{}{
+			"event_type": "agent.heartbeat",
+			"message":    "Test heartbeat",
+		}, apiKeyHeaders, http.StatusUnauthorized) // Expected to fail without proper setup
+	})
+}
+
+// TestPaginationCompliance tests that pagination works correctly
+func TestPaginationCompliance(t *testing.T) {
+	suite := NewContractTestSuite(t)
+	defer suite.Close()
+
+	userID := uuid.New()
+	orgClaims := []auth.OrgClaim{{ID: uuid.New(), Slug: "pagination-test-org", Role: "owner"}}
+	authHeaders := suite.createAuthHeaders(userID, "pagination-test@example.com", orgClaims)
+
+	t.Run("Default Pagination", func(t *testing.T) {
+		resp := suite.TestEndpointContract("GET", "/api/v1/orgs/pagination-test-org/agents", nil, authHeaders, http.StatusOK)
+		
+		var response map[string]interface{}
+		decoder := json.NewDecoder(resp.Body)
+		err := decoder.Decode(&response)
+		require.NoError(t, err)
+		
+		// Validate pagination structure
+		assert.NotNil(t, response["data"])
+		assert.NotNil(t, response["total"])
+		assert.NotNil(t, response["page"])
+		assert.NotNil(t, response["per_page"])
+		assert.NotNil(t, response["total_pages"])
+	})
+
+	t.Run("Custom Pagination Parameters", func(t *testing.T) {
+		suite.TestEndpointContract("GET", "/api/v1/orgs/pagination-test-org/agents?limit=5&offset=10", nil, authHeaders, http.StatusOK)
+	})
+
+	t.Run("Invalid Pagination Parameters", func(t *testing.T) {
+		// Negative limit should still work (likely converted to default)
+		suite.TestEndpointContract("GET", "/api/v1/orgs/pagination-test-org/agents?limit=-1", nil, authHeaders, http.StatusOK)
+	})
+}

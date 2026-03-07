@@ -23,8 +23,22 @@ test-integration:
 	INTEGRATION_TEST_MODE=true TEST_WORKSPACE_DIR=/tmp/test-workspaces TEST_STATE_DIR=/tmp/test-state \
 		go test -v -race -timeout=30m -count=1 $(INTEGRATION_PKG)
 
-# All tests (unit + integration)
-test-all: test-unit test-integration
+# Contract tests
+test-contract:
+	@echo "Running API contract tests..."
+	go test -v ./web/testing
+
+# Frontend contract tests
+test-contract-frontend:
+	@echo "Running frontend contract tests..."
+	cd frontend && npm run test:contract
+
+# All contract validation
+validate-contracts: test-contract test-contract-frontend
+	@echo "Complete contract validation finished"
+
+# All tests (unit + integration + contract)
+test-all: test-unit test-integration test-contract
 
 # Default test target (unit tests only for speed)
 test: test-unit
@@ -170,10 +184,13 @@ help:
 	@echo "  test                     - Run unit tests (default)"
 	@echo "  test-unit                - Run unit tests only"  
 	@echo "  test-integration         - Run integration tests only"
-	@echo "  test-all                 - Run all tests (unit + integration)"
+	@echo "  test-contract            - Run API contract tests"
+	@echo "  test-contract-frontend   - Run frontend contract tests"  
+	@echo "  test-all                 - Run all tests (unit + integration + contract)"
 	@echo "  test-race                - Run race condition detection tests"
 	@echo "  test-cover               - Run all tests with coverage (legacy)"
 	@echo "  test-integration-cover   - Run integration tests with coverage (legacy)"
+	@echo "  validate-contracts       - Run complete contract validation (backend + frontend)"
 	@echo ""
 	@echo "Coverage Analysis:"
 	@echo "  coverage                 - Complete coverage analysis (unit + integration + reports)"
