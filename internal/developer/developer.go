@@ -28,8 +28,10 @@ type DeveloperAgent struct {
 // New creates a new DeveloperAgent.
 func New(deps agent.Dependencies) (agent.Agent, error) {
 	// Create workspace manager configuration
+	// Use repo-specific workspace path to prevent collisions when running multiple agents
+	repoWorkspaceDir := deps.Config.GetWorkspacePath(deps.Config.Agents.Developer.WorkspaceDir)
 	workspaceConfig := workspace.ManagerConfig{
-		BaseDir:           deps.Config.Agents.Developer.WorkspaceDir,
+		BaseDir:           repoWorkspaceDir,
 		MaxSizeMB:         deps.Config.Workspace.Limits.MaxSizeMB,
 		MinFreeDiskMB:     deps.Config.Workspace.Limits.MinFreeDiskMB,
 		MaxConcurrent:     deps.Config.Workspace.Cleanup.MaxConcurrent,
@@ -101,7 +103,7 @@ func New(deps agent.Dependencies) (agent.Agent, error) {
 		repoCfg := creativity.RepoConfig{
 			URL:          fmt.Sprintf("https://github.com/%s/%s.git", deps.Config.GitHub.Owner, deps.Config.GitHub.Repo),
 			Token:        deps.Config.GitHub.Token,
-			WorkspaceDir: deps.Config.Agents.Developer.WorkspaceDir,
+			WorkspaceDir: repoWorkspaceDir,
 		}
 		engine := creativity.NewCreativityEngine(
 			ghAdapter,
