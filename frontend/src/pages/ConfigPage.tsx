@@ -143,7 +143,7 @@ const DEFAULT_CONFIG: Record<string, unknown> = {
       max_concurrent: 1,
       workspace_dir: './workspaces',
       allow_pr_merging: false,
-      allow_auto_issue_processing: true,
+      allow_auto_issue_processing: false,
     },
   },
   creativity: {

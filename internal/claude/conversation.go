@@ -28,13 +28,14 @@ type ToolExecutor func(ctx context.Context, name string, input json.RawMessage) 
 
 // Conversation manages a multi-turn conversation with Claude, including tool use.
 type Conversation struct {
-	client   *Client
-	system   string
-	messages []anthropic.MessageParam
-	tools    []anthropic.ToolUnionParam
-	executor ToolExecutor
-	logger   *slog.Logger
-	maxIter  int
+	client        *Client
+	system        string
+	messages      []anthropic.MessageParam
+	tools         []anthropic.ToolUnionParam
+	executor      ToolExecutor
+	logger        *slog.Logger
+	maxIter       int
+	toolCallCount int
 }
 
 // NewConversation creates a new conversation manager.
@@ -77,13 +78,9 @@ func (c *Conversation) Send(ctx context.Context, userMessage string) (string, er
 		// Append assistant response to history.
 		c.messages = append(c.messages, assistantMessageFromResponse(msg))
 
-		// Check if we need to handle tool use.
-		if msg.StopReason != "tool_use" {
-			c.logger.Info("conversation complete", "iterations_used", i+1, "iterations_max", c.maxIter)
-			return ExtractText(msg), nil
-		}
-
-		// Log assistant thinking and tool summary for this iteration.
+		// Count tool_use blocks in the response regardless of StopReason.
+		// Claude can hit max_tokens mid-response and return tool_use blocks
+		// with a StopReason of "max_tokens" instead of "tool_use".
 		var assistantText string
 		toolCount := 0
 		var toolSummaries []string
@@ -96,12 +93,28 @@ func (c *Conversation) Send(ctx context.Context, userMessage string) (string, er
 				toolSummaries = append(toolSummaries, summarizeToolCall(block.Name, block.Input))
 			}
 		}
+
+		// If no tool_use blocks, the conversation turn is complete.
+		if toolCount == 0 {
+			c.logger.Info("conversation complete", "iterations_used", i+1, "iterations_max", c.maxIter, "stop_reason", msg.StopReason)
+			return ExtractText(msg), nil
+		}
+
+		// Log iteration progress.
 		remaining := c.maxIter - i - 1
+		if msg.StopReason != "tool_use" {
+			c.logger.Warn("response contains tool_use blocks but stop_reason is not tool_use",
+				"stop_reason", msg.StopReason,
+				"tool_count", toolCount,
+				"iteration", fmt.Sprintf("%d/%d", i+1, c.maxIter),
+			)
+		}
 		c.logger.Info("iteration progress",
 			"iteration", fmt.Sprintf("%d/%d", i+1, c.maxIter),
 			"remaining", remaining,
 			"tools_in_response", toolCount,
 			"tool_calls", toolSummaries,
+			"stop_reason", msg.StopReason,
 		)
 		if assistantText != "" {
 			// Log a truncated version of the assistant's reasoning.
@@ -116,12 +129,18 @@ func (c *Conversation) Send(ctx context.Context, userMessage string) (string, er
 		if err != nil {
 			return "", fmt.Errorf("processing tool calls: %w", err)
 		}
+		c.toolCallCount += toolCount
 
 		c.messages = append(c.messages, anthropic.NewUserMessage(toolResults...))
 	}
 
 	c.logger.Warn("iteration budget exhausted", "iterations_max", c.maxIter)
 	return "", fmt.Errorf("%w (%d)", ErrMaxIterations, c.maxIter)
+}
+
+// ToolCallCount returns the total number of tool calls made across all iterations.
+func (c *Conversation) ToolCallCount() int {
+	return c.toolCallCount
 }
 
 func (c *Conversation) processToolCalls(ctx context.Context, msg *anthropic.Message) ([]anthropic.ContentBlockParamUnion, error) {

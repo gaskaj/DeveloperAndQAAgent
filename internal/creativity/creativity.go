@@ -24,7 +24,7 @@ type RepoConfig struct {
 type CreativityEngine struct {
 	gh             GitHubClient
 	ai             AIClient
-	cfg            config.CreativityConfig
+	cfg            *config.CreativityConfig
 	repoCfg        RepoConfig
 	repo           *gitops.Repo
 	rejectionCache *RejectionCache
@@ -34,7 +34,9 @@ type CreativityEngine struct {
 }
 
 // NewCreativityEngine creates a new CreativityEngine.
-func NewCreativityEngine(gh GitHubClient, ai AIClient, cfg config.CreativityConfig, repoCfg RepoConfig, agentID string, logger *slog.Logger, memStore *memory.Store) *CreativityEngine {
+// The cfg pointer should point to a live config struct so that hot-reloaded
+// values (e.g. MaxPendingSuggestions) are visible without restarting the engine.
+func NewCreativityEngine(gh GitHubClient, ai AIClient, cfg *config.CreativityConfig, repoCfg RepoConfig, agentID string, logger *slog.Logger, memStore *memory.Store) *CreativityEngine {
 	return &CreativityEngine{
 		gh:             gh,
 		ai:             ai,
