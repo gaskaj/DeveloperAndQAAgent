@@ -36,22 +36,33 @@ type OrgContext struct {
 }
 
 // RequireAuth is middleware that validates JWT tokens from the Authorization header.
+// It also supports a "token" query parameter as a fallback for WebSocket connections
+// where browsers cannot set custom headers.
 func RequireAuth(jwtMgr *auth.JWTManager) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var tokenStr string
+
+			// Try Authorization header first
 			header := r.Header.Get("Authorization")
-			if header == "" {
-				http.Error(w, `{"error":"missing authorization header"}`, http.StatusUnauthorized)
+			if header != "" {
+				parts := strings.SplitN(header, " ", 2)
+				if len(parts) == 2 && parts[0] == "Bearer" {
+					tokenStr = parts[1]
+				}
+			}
+
+			// Fallback to query parameter (for WebSocket connections)
+			if tokenStr == "" {
+				tokenStr = r.URL.Query().Get("token")
+			}
+
+			if tokenStr == "" {
+				http.Error(w, `{"error":"missing authorization"}`, http.StatusUnauthorized)
 				return
 			}
 
-			parts := strings.SplitN(header, " ", 2)
-			if len(parts) != 2 || parts[0] != "Bearer" {
-				http.Error(w, `{"error":"invalid authorization header"}`, http.StatusUnauthorized)
-				return
-			}
-
-			claims, err := jwtMgr.ValidateToken(parts[1])
+			claims, err := jwtMgr.ValidateToken(tokenStr)
 			if err != nil {
 				http.Error(w, `{"error":"invalid or expired token"}`, http.StatusUnauthorized)
 				return

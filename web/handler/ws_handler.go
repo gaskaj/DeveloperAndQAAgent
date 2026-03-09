@@ -24,19 +24,12 @@ func NewWSHandler(hub *ws.Hub, jwtMgr *auth.JWTManager, logger *slog.Logger) *WS
 }
 
 func (h *WSHandler) HandleConnect(w http.ResponseWriter, r *http.Request) {
+	// Auth is handled by RequireAuth middleware (supports both header and query param).
+	// Org context is set by RequireOrgAccess middleware.
 	orgCtx := middleware.GetOrgFromContext(r.Context())
 	if orgCtx == nil {
-		// Try JWT from query param for WebSocket connections
-		token := r.URL.Query().Get("token")
-		if token == "" {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		_, err := h.jwtMgr.ValidateToken(token)
-		if err != nil {
-			http.Error(w, "invalid token", http.StatusUnauthorized)
-			return
-		}
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
 	}
 
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
@@ -48,13 +41,11 @@ func (h *WSHandler) HandleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := ws.NewClient(conn)
-	orgID := orgCtx.OrgID
-
-	h.hub.Register(orgID, client)
+	h.hub.Register(orgCtx.OrgID, client)
 
 	ctx := r.Context()
 	go client.WritePump(ctx)
 	client.ReadPump(ctx)
 
-	h.hub.Unregister(orgID, client)
+	h.hub.Unregister(orgCtx.OrgID, client)
 }

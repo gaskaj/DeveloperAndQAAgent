@@ -117,6 +117,14 @@ export interface Invitation {
   created_at: string;
 }
 
+export interface AgentLogEntry {
+  agent_name: string;
+  level: string;
+  message: string;
+  fields?: Record<string, unknown>;
+  timestamp: string;
+}
+
 export interface AuditLog {
   id: string;
   org_id: string;

@@ -104,6 +104,7 @@ func New(
 			r.Post("/events", eventHandler.HandleIngestSingle)
 			r.Post("/events/batch", eventHandler.HandleIngestBatch)
 			r.Post("/heartbeat", eventHandler.HandleIngestHeartbeat)
+			r.Post("/logs", eventHandler.HandleIngestLogs)
 			r.Get("/config", configHandler.HandleIngestConfig)
 		})
 

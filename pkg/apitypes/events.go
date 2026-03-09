@@ -20,7 +20,23 @@ const (
 	EventIssueCompleted     EventType = "issue.completed"
 	EventWorkflowTransition EventType = "workflow.transition"
 	EventSuggestionCreated  EventType = "suggestion.created"
+	EventAgentLog           EventType = "agent.log"
 )
+
+// LogEntry represents a structured log line from an agent.
+type LogEntry struct {
+	AgentName string         `json:"agent_name"`
+	Level     string         `json:"level"`
+	Message   string         `json:"message"`
+	Fields    map[string]any `json:"fields,omitempty"`
+	Timestamp time.Time      `json:"timestamp"`
+}
+
+// LogBatchRequest is the request body for batch log ingestion.
+type LogBatchRequest struct {
+	AgentName string     `json:"agent_name"`
+	Entries   []LogEntry `json:"entries"`
+}
 
 // Severity represents the severity level of an event.
 type Severity string

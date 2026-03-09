@@ -235,6 +235,52 @@ func (h *EventHandler) HandleIngestHeartbeat(w http.ResponseWriter, r *http.Requ
 	respondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// HandleIngestLogs receives agent log entries and broadcasts them via WebSocket
+// without persisting to the database. This provides a real-time log stream view.
+func (h *EventHandler) HandleIngestLogs(w http.ResponseWriter, r *http.Request) {
+	orgCtx := middleware.GetOrgFromContext(r.Context())
+	if orgCtx == nil {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req apitypes.LogBatchRequest
+	if err := decodeJSON(r, &req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Prefer agent identity from API key context
+	agentName := orgCtx.AgentName
+	if agentName == "" {
+		agentName = req.AgentName
+	}
+
+	// Broadcast each log entry to WebSocket clients — no DB persistence
+	for _, entry := range req.Entries {
+		entry.AgentName = agentName
+		h.broadcastLogEntry(orgCtx.OrgID, &entry)
+	}
+
+	respondJSON(w, http.StatusOK, map[string]any{"status": "ok", "count": len(req.Entries)})
+}
+
+func (h *EventHandler) broadcastLogEntry(orgID uuid.UUID, entry *apitypes.LogEntry) {
+	if h.hub == nil {
+		return
+	}
+	// Wrap in an envelope so the frontend can distinguish log messages from events
+	msg := map[string]any{
+		"type": "agent.log",
+		"log":  entry,
+	}
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
+	h.hub.Broadcast(orgID, data)
+}
+
 func (h *EventHandler) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	orgCtx := middleware.GetOrgFromContext(r.Context())
 	if orgCtx == nil {

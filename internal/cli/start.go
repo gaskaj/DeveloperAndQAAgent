@@ -107,9 +107,10 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	// Initialize control plane reporter if configured
 	var rptr *reporter.Reporter
+	var logHandler *reporter.LogHandler
 	if cfg.ControlPlane.Enabled {
 		hostname, _ := os.Hostname()
-		rptr, err = reporter.New(reporter.Config{
+		rptrCfg := reporter.Config{
 			ControlPlaneURL: cfg.ControlPlane.URL,
 			APIKey:          cfg.ControlPlane.APIKey,
 			AgentType:       "developer",
@@ -118,11 +119,16 @@ func runStart(cmd *cobra.Command, args []string) error {
 			GitHubOwner:     cfg.GitHub.Owner,
 			GitHubRepo:      cfg.GitHub.Repo,
 			FlushInterval:   5 * time.Second,
-		})
+		}
+		rptr, err = reporter.New(rptrCfg)
 		if err != nil {
 			logger.Warn("failed to initialize control plane reporter, continuing without it", "error", err)
 		} else {
 			logger.Info("control plane reporter initialized", "url", cfg.ControlPlane.URL)
+
+			// Wrap logger with forwarding handler so all agent logs stream to control plane
+			logHandler = reporter.NewLogHandler(logger.Handler(), rptrCfg, slog.LevelDebug)
+			logger = slog.New(logHandler)
 		}
 	}
 
@@ -248,7 +254,10 @@ func runStart(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Shutdown control plane reporter
+	// Shutdown log forwarding and control plane reporter
+	if logHandler != nil {
+		logHandler.Close()
+	}
 	if rptr != nil {
 		if err := rptr.Close(); err != nil {
 			logger.Error("failed to close control plane reporter", "error", err)

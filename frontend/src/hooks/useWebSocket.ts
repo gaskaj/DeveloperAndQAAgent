@@ -1,13 +1,15 @@
 import { useEffect, useRef } from 'react';
 import ReconnectingWebSocket from 'reconnecting-websocket';
-import { createEventStream, parseEventMessage } from '@/api/ws';
+import { createEventStream, parseWSMessage } from '@/api/ws';
 import { useAuthStore } from '@/store/auth-store';
 import { useEventStore } from '@/store/event-store';
+import { useLogStore } from '@/store/log-store';
 
 export function useWebSocket(orgSlug: string | undefined) {
   const wsRef = useRef<ReconnectingWebSocket | null>(null);
   const token = useAuthStore((s) => s.token);
   const addRealtimeEvent = useEventStore((s) => s.addRealtimeEvent);
+  const addLogEntry = useLogStore((s) => s.addLogEntry);
 
   useEffect(() => {
     if (!orgSlug || !token) return;
@@ -16,9 +18,13 @@ export function useWebSocket(orgSlug: string | undefined) {
     wsRef.current = ws;
 
     ws.onmessage = (evt) => {
-      const event = parseEventMessage(evt.data);
-      if (event) {
-        addRealtimeEvent(event);
+      const msg = parseWSMessage(evt.data);
+      if (!msg) return;
+
+      if (msg.type === 'agent.log') {
+        addLogEntry(msg.log);
+      } else {
+        addRealtimeEvent(msg.event);
       }
     };
 
@@ -30,7 +36,7 @@ export function useWebSocket(orgSlug: string | undefined) {
       ws.close();
       wsRef.current = null;
     };
-  }, [orgSlug, token, addRealtimeEvent]);
+  }, [orgSlug, token, addRealtimeEvent, addLogEntry]);
 
   return wsRef;
 }

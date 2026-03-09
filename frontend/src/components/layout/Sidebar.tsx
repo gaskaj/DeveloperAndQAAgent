@@ -4,7 +4,7 @@ import {
   Bot,
   Activity,
   Settings,
-  ScrollText,
+  Terminal,
   Key,
   Wrench,
 } from 'lucide-react';
@@ -18,7 +18,7 @@ const navItems = [
   { to: '/events', label: 'Events', icon: Activity },
   { to: '/settings', label: 'Settings', icon: Settings },
   { to: '/settings/api-keys', label: 'API Keys', icon: Key },
-  { to: '/audit', label: 'Audit Log', icon: ScrollText },
+  { to: '/audit', label: 'Agent Logs', icon: Terminal },
 ];
 
 export function Sidebar() {
