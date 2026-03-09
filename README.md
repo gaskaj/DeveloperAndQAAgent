@@ -4,7 +4,7 @@
 
 **Autonomous AI agents that monitor GitHub issues, write code, and create pull requests — managed from a centralized control plane.**
 
-![Coverage](https://img.shields.io/badge/coverage-49.0%25-red)
+![Coverage](https://img.shields.io/badge/coverage-82.2%25-green)
 ![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
