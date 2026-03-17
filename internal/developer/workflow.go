@@ -847,6 +847,23 @@ func (d *DeveloperAgent) implement(ctx context.Context, repo *gitops.Repo, issue
 		return err
 	}
 
+	// Check if files were actually modified. Claude sometimes uses only
+	// read-only tools (search_files, list_files, read_file) and then
+	// returns a text description instead of calling write_file/edit_file.
+	// When that happens, nudge it to actually make the changes.
+	hasChanges, _ := repo.HasChanges()
+	if !hasChanges {
+		d.logger().Warn("implementation produced no file changes, sending follow-up nudge")
+		response, err = conv.Send(ctx,
+			"You have not created or modified any files yet. The workspace is unchanged. "+
+				"You MUST use write_file to create new files and edit_file to modify existing ones. "+
+				"Do not describe the changes — actually make them now using the tools. "+
+				"Start implementing the first file immediately with write_file.")
+		if err != nil {
+			return err
+		}
+	}
+
 	// Extract learnings from successful implementation
 	if d.memoryStore != nil && d.Deps.Config.Memory.ExtractOnComplete {
 		d.extractMemories(ctx, response, issueContext)

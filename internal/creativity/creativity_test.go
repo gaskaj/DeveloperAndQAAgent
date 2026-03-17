@@ -68,8 +68,8 @@ func (m *mockAI) GenerateSuggestion(_ context.Context, _ string) (*Suggestion, e
 	return m.suggestion, nil
 }
 
-func testConfig() config.CreativityConfig {
-	return config.CreativityConfig{
+func testConfig() *config.CreativityConfig {
+	return &config.CreativityConfig{
 		Enabled:                   true,
 		IdleThresholdSeconds:      1,
 		SuggestionCooldownSeconds: 1,

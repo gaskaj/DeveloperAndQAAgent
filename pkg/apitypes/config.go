@@ -121,6 +121,115 @@ type ShutdownRemoteConfig struct {
 	ResetClaims       *bool   `json:"reset_claims,omitempty"`
 }
 
+// ApplyServerDefaults fills in nil fields with sensible default values.
+// This ensures agents receive complete configuration even when only some
+// fields were explicitly set in the control plane UI. Sections that are
+// entirely absent are initialized with full defaults.
+func (rc *RemoteConfig) ApplyServerDefaults() {
+	if rc.Agents == nil {
+		rc.Agents = &AgentsRemoteConfig{}
+	}
+	if rc.Agents.Developer == nil {
+		rc.Agents.Developer = &DeveloperRemoteConfig{}
+	}
+	rc.Agents.Developer.applyDefaults()
+
+	if rc.Creativity == nil {
+		rc.Creativity = &CreativityRemoteConfig{}
+	}
+	rc.Creativity.applyDefaults()
+
+	if rc.Decomposition == nil {
+		rc.Decomposition = &DecompositionRemoteConfig{}
+	}
+	rc.Decomposition.applyDefaults()
+
+	if rc.Memory == nil {
+		rc.Memory = &MemoryRemoteConfig{}
+	}
+	rc.Memory.applyDefaults()
+}
+
+func (d *DeveloperRemoteConfig) applyDefaults() {
+	if d.Enabled == nil {
+		v := true
+		d.Enabled = &v
+	}
+	if d.MaxConcurrent == nil {
+		v := 1
+		d.MaxConcurrent = &v
+	}
+	if d.WorkspaceDir == nil {
+		v := "./workspaces"
+		d.WorkspaceDir = &v
+	}
+	if d.AllowPRMerging == nil {
+		v := false
+		d.AllowPRMerging = &v
+	}
+	if d.AllowAutoIssueProcessing == nil {
+		v := false
+		d.AllowAutoIssueProcessing = &v
+	}
+}
+
+func (c *CreativityRemoteConfig) applyDefaults() {
+	if c.Enabled == nil {
+		v := true
+		c.Enabled = &v
+	}
+	if c.IdleThresholdSeconds == nil {
+		v := 120
+		c.IdleThresholdSeconds = &v
+	}
+	if c.SuggestionCooldownSeconds == nil {
+		v := 300
+		c.SuggestionCooldownSeconds = &v
+	}
+	if c.MaxPendingSuggestions == nil {
+		v := 5
+		c.MaxPendingSuggestions = &v
+	}
+	if c.MaxRejectionHistory == nil {
+		v := 50
+		c.MaxRejectionHistory = &v
+	}
+}
+
+func (d *DecompositionRemoteConfig) applyDefaults() {
+	if d.Enabled == nil {
+		v := true
+		d.Enabled = &v
+	}
+	if d.MaxIterationBudget == nil {
+		v := 250
+		d.MaxIterationBudget = &v
+	}
+	if d.MaxSubtasks == nil {
+		v := 5
+		d.MaxSubtasks = &v
+	}
+}
+
+func (m *MemoryRemoteConfig) applyDefaults() {
+	if m.Enabled == nil {
+		v := true
+		m.Enabled = &v
+	}
+	if m.MaxEntries == nil {
+		v := 100
+		m.MaxEntries = &v
+	}
+	if m.MaxPromptSize == nil {
+		v := 8000
+		m.MaxPromptSize = &v
+	}
+	if m.ExtractOnComplete == nil {
+		v := true
+		m.ExtractOnComplete = &v
+	}
+}
+
 // ConfigResponse is returned to agents when they poll for configuration.
 type ConfigResponse struct {
 	Config  RemoteConfig `json:"config"`

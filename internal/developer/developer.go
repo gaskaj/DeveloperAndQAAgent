@@ -133,7 +133,7 @@ func New(deps agent.Dependencies) (agent.Agent, error) {
 		engine := creativity.NewCreativityEngine(
 			ghAdapter,
 			aiAdapter,
-			deps.Config.Creativity,
+			&deps.Config.Creativity,
 			repoCfg,
 			string(agent.TypeDeveloper),
 			deps.Logger.With("component", "creativity"),

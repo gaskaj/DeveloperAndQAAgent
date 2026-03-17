@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/gaskaj/OpenAgentFramework/pkg/apitypes"
 	"github.com/gaskaj/OpenAgentFramework/web/middleware"
 	"github.com/gaskaj/OpenAgentFramework/web/store"
 )
@@ -288,6 +289,17 @@ func (h *ConfigHandler) HandleIngestConfig(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Unmarshal, apply server-side defaults for missing fields, then return.
+	// This ensures agents receive complete configuration even when only some
+	// fields were explicitly set in the control plane UI.
+	var remoteConfig apitypes.RemoteConfig
+	if err := json.Unmarshal(merged, &remoteConfig); err != nil {
+		h.logger.Error("unmarshalling merged config", "error", err)
+		respondError(w, http.StatusInternalServerError, "failed to process config")
+		return
+	}
+	remoteConfig.ApplyServerDefaults()
+
 	// Support ETag-based conditional requests
 	etag := fmt.Sprintf(`"%d"`, version)
 	w.Header().Set("ETag", etag)
@@ -298,7 +310,7 @@ func (h *ConfigHandler) HandleIngestConfig(w http.ResponseWriter, r *http.Reques
 	}
 
 	respondJSON(w, http.StatusOK, map[string]any{
-		"config":  merged,
+		"config":  remoteConfig,
 		"version": version,
 	})
 }
